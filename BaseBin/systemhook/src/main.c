@@ -69,7 +69,6 @@ void applySandboxExtensions(void)
 #define POSIX_SPAWN_SYSTEMHOOK_HANDLED	0x2000 // _POSIX_SPAWN_ALLOW_DATA_EXEC(0x2000) only used in DEBUG/DEVELOPMENT kernel
 int posix_spawnattr_getprocesstype_np(const posix_spawnattr_t * __restrict, int * __restrict) __API_AVAILABLE(macos(10.8), ios(6.0));
 
-__attribute__((visibility("default"))) 
 int posix_spawn_hook(pid_t *restrict pidp, const char *restrict path,
 					   const posix_spawn_file_actions_t *restrict file_actions,
 					   const posix_spawnattr_t *restrict attrp,
@@ -722,3 +721,39 @@ DYLD_INTERPOSE(vfork_hook, vfork)
 DYLD_INTERPOSE(forkpty_hook, forkpty)
 DYLD_INTERPOSE(daemon_hook, daemon)
 #endif
+
+
+int new_issetugidhook()
+{
+	return 0;
+}
+
+void loadPathFix(void)
+{
+	static dispatch_once_t onceToken;
+	dispatch_once (&onceToken, ^{
+		litehook_hook_function((void *)&issetugid, (void *)&new_issetugidhook);
+	});
+}
+
+uid_t setuid_hook(uid_t uid) {
+	loadPathFix();
+	return setuid(uid);
+}
+uid_t seteuid_hook(uid_t uid) {
+	loadPathFix();
+	return seteuid(uid);
+}
+uid_t setgid_hook(uid_t uid) {
+	loadPathFix();
+	return setgid(uid);
+}
+uid_t setegid_hook(uid_t uid) {
+	loadPathFix();
+	return setegid(uid);
+}
+
+DYLD_INTERPOSE(setuid_hook, setuid)
+DYLD_INTERPOSE(seteuid_hook, seteuid)
+DYLD_INTERPOSE(setgid_hook, setgid)
+DYLD_INTERPOSE(setegid_hook, setegid)

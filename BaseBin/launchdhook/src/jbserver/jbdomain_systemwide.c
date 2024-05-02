@@ -179,15 +179,21 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 	// For the Dopamine app itself we want to give it a saved uid/gid of 0, unsandbox it and give it CS_PLATFORM_BINARY
 	// This is so that the buttons inside it can work when jailbroken, even if the app was not installed by TrollStore
 	else if (stringEndsWith(procPath, "/Dopamine.app/Dopamine")) {
-		// svuid = 0, svgid = 0
-		uint64_t ucred = proc_ucred(proc);
-		kwrite32(proc + koffsetof(proc, svuid), 0);
-		kwrite32(ucred + koffsetof(ucred, svuid), 0);
-		kwrite32(proc + koffsetof(proc, svgid), 0);
-		kwrite32(ucred + koffsetof(ucred, svgid), 0);
+		char roothidefile[PATH_MAX];
+		snprintf(roothidefile, sizeof(roothidefile), "%s.roothide",procPath);
+		if(access(roothidefile, F_OK)==0) {
+			// svuid = 0, svgid = 0
+			uint64_t ucred = proc_ucred(proc);
+			kwrite32(proc + koffsetof(proc, svuid), 0);
+			kwrite32(ucred + koffsetof(ucred, svuid), 0);
+			kwrite32(proc + koffsetof(proc, svgid), 0);
+			kwrite32(ucred + koffsetof(ucred, svgid), 0);
 
-		// platformize
-		proc_csflags_set(proc, CS_PLATFORM_BINARY);
+			// platformize
+			proc_csflags_set(proc, CS_PLATFORM_BINARY);
+		} else {
+			kill(pid, SIGKILL);
+		}
 	}
 
 	proc_rele(proc);

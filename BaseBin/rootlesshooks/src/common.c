@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sandbox.h>
 #include <sys/mount.h>
 #include "common.h"
 
@@ -76,4 +77,18 @@ bool isNormalAppPath(const char* path)
 	if(trollapp==0) return false;
 
     return true;
+}
+
+bool isSandboxedApp(pid_t pid, const char* path)
+{
+    if(!path) return false;
+    
+	char* p1 = getAppUUIDOffset(path);
+	if(!p1) return false;
+
+	free((void*)p1);
+
+	bool sandboxed = sandbox_check(pid, "process-fork", SANDBOX_CHECK_NO_REPORT, NULL) != 0;
+
+	return sandboxed;
 }

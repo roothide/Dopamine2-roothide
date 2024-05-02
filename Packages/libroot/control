@@ -7,3 +7,4 @@ Version: 1.0.1
 Priority: optional
 Section: Development
 Description: libroot for Dopamine
+Provides: libroot-roothide

@@ -11,7 +11,7 @@ endif
 sign: $(TARGET)
 	@ldid -S $^
 
-$(TARGET): $(wildcard src/*.c src/*.m ../libjailbreak/src/jbclient_xpc.c ../forkfix/src/litehook.c)
+$(TARGET): $(wildcard src/*.c src/*.m src/*.S ../libjailbreak/src/jbclient_xpc.c ../forkfix/src/litehook.c)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 clean:

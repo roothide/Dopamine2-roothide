@@ -207,7 +207,7 @@
             [specifiers addObject:removeJailbreakSwitchSpecifier];
         }
         
-        if (envManager.isJailbroken || (envManager.isInstalledThroughTrollStore && envManager.isBootstrapped)) {
+        if (envManager.isJailbroken || envManager.isInstalledThroughTrollStore) {
             PSSpecifier *actionsGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
             actionsGroupSpecifier.name = DOLocalizedString(@"Section_Actions");
             [specifiers addObject:actionsGroupSpecifier];

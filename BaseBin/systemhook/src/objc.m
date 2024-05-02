@@ -1,9 +1,50 @@
-#import <Foundation/Foundation.h>
-#import <dlfcn.h>
-#import <objc/runtime.h>
 #include <libjailbreak/jbclient_xpc.h>
-#import "common.h"
+#import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 #import <os/log.h>
+#include <spawn.h>
+#import <dlfcn.h>
+#import "common.h"
+#import "litehook.h"
+
+
+struct _posix_spawn_args_desc {
+	size_t		attr_size;	/* size of attributes block */
+	posix_spawnattr_t	attrp;		/* pointer to block */
+	size_t	file_actions_size;	/* size of file actions block */
+	posix_spawn_file_actions_t file_actions;	/* pointer to block */
+}; //https://opensource.apple.com/source/xnu/xnu-4570.31.3/bsd/sys/spawn_internal.h
+
+#define POSIX_SPAWN_PROC_TYPE_DRIVER 0x700
+#define POSIX_SPAWN_SYSTEMHOOK_HANDLED	0x2000 // _POSIX_SPAWN_ALLOW_DATA_EXEC(0x2000) only used in DEBUG/DEVELOPMENT kernel
+int posix_spawnattr_getprocesstype_np(const posix_spawnattr_t *__restrict, int *__restrict) __API_AVAILABLE(macos(10.8), ios(6.0));
+
+int syscall__posix_spawn(pid_t* pidp, const char * path, struct _posix_spawn_args_desc* ad, char *const argv, char *const envp);
+int posix_spawn_hook(pid_t* pidp, const char* path, posix_spawn_file_actions_t* file_actions, posix_spawnattr_t * attrp,char *const argv,char *const envp);
+int __posix_spawn(pid_t* pidp, const char * path, struct _posix_spawn_args_desc* ad, char *const argv, char *const envp);
+int new__posix_spawn(pid_t* pidp, const char * path, struct _posix_spawn_args_desc* ad, char *const argv, char *const envp)
+{
+	int ret;
+
+    short flags = 0;
+    int proctype = 0;
+
+	if(ad && ad->attrp) {
+		posix_spawnattr_getflags(&ad->attrp, &flags);
+		posix_spawnattr_getprocesstype_np(&ad->attrp, &proctype);
+	}
+
+	if((proctype != POSIX_SPAWN_PROC_TYPE_DRIVER) && (flags & POSIX_SPAWN_SYSTEMHOOK_HANDLED)==0) {
+		//reentrant
+		ret = posix_spawn_hook(pidp, path, &ad->file_actions, &ad->attrp, argv, envp);
+
+	} else {
+		ret =  syscall__posix_spawn(pidp, path, ad, argv, envp);
+	}
+
+	return ret;
+}
+
 
 // If you ever wondered how to hook an Objective C method without linking anything (Foundation/libobjc), this is how
 
@@ -26,7 +67,7 @@ bool NSConcreteTask_launchWithDictionary_error__hook(id self, id sender, NSDicti
 {
 	static dispatch_once_t onceToken;
 	dispatch_once (&onceToken, ^{
-		dlopen(JBRootPath("/basebin/forkfix.dylib"), RTLD_NOW);
+		litehook_hook_function((void *)&__posix_spawn, (void *)&new__posix_spawn);
 	});
 
 	if (dictionary) {

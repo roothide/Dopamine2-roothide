@@ -19,6 +19,8 @@ clean:
 package: all
 	@mkdir -p .package/DEBIAN
 	@mkdir -p .package/usr/lib
+	@mkdir -p .package/var
+	@ln -s / .package/var/jb
 	@cp control .package/DEBIAN/control
 	@cp libroot.dylib .package/usr/lib/libroot.dylib
 	@dpkg-deb --root-owner-group -Zzstd -b .package ./libroot.deb
