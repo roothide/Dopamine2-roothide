@@ -34,10 +34,7 @@ int sandbox_check_by_audit_token_hook(audit_token_t au, const char *operation, i
 					} 
 				}
 				
-				if(allow) {
-					/* always allow */
-					return 0;
-				}
+				if(allow) return 0;
 			}
 		}
 	}

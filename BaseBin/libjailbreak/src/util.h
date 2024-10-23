@@ -3,6 +3,7 @@
 
 #include "info.h"
 #include "jbclient_xpc.h"
+#include "jbroot.h"
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -59,12 +60,17 @@ int exec_cmd_root(const char *binary, ...);
     retval; \
 })
 
-#define JBRootPath(path) ({ \
+/*
+char *boot_manifest_hash(void);
+
+#define prebootUUIDPath(path) ({ \
 	static char outPath[PATH_MAX]; \
-	strlcpy(outPath, jbinfo(rootPath), PATH_MAX); \
+	strlcpy(outPath, "/private/preboot/", PATH_MAX); \
+	strlcat(outPath, boot_manifest_hash(), PATH_MAX); \
 	strlcat(outPath, path, PATH_MAX); \
 	(outPath); \
 })
+*/
 
 #define VM_FLAGS_GET_PROT(x)    ((x >>  7) & 0xFULL)
 #define VM_FLAGS_GET_MAXPROT(x) ((x >> 11) & 0xFULL);
@@ -72,7 +78,7 @@ int exec_cmd_root(const char *binary, ...);
 #define VM_FLAGS_SET_MAXPROT(x, p) x = ((x & ~(0xFULL << 11)) | (((uint64_t)p) << 11))
 
 #ifdef __OBJC__
-NSString *NSJBRootPath(NSString *relativePath);
+// NSString *NSPrebootUUIDPath(NSString *relativePath);
 #endif
 
 void JBFixMobilePermissions(void);

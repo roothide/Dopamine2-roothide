@@ -63,6 +63,27 @@
     return updates;
 }
 
+/*
+- (NSArray *)getLatestReleases
+{
+    static dispatch_once_t onceToken;
+    static NSArray *releases;
+    dispatch_once(&onceToken, ^{
+        NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/opa334/Dopamine/releases"];
+        NSData *data = [NSData dataWithContentsOfURL:url];
+        if (data) {
+            NSError *error;
+            releases = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+            if (error)
+            {
+                onceToken = 0;
+                releases = @[];
+            }
+        }
+    });
+    return releases;
+}
+*/
 - (NSArray *)getLatestReleases
 {
     static NSLock* reqLock=nil;
@@ -157,7 +178,7 @@
 
 - (NSString*)getLaunchedReleaseTag
 {
-    return [DOEnvironmentManager.sharedManager nightlyHash];
+    return [[[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] componentsSeparatedByString:@"."] lastObject];
 }
 
 - (NSArray*)availablePackageManagers
@@ -237,8 +258,6 @@
 
 - (void)sendLog:(NSString*)log debug:(BOOL)debug update:(BOOL)update
 {
-    // NSLog(@"sendLog: %@", log);
-    
     if (!self.logView || !log)
         return;
 
