@@ -272,6 +272,9 @@ bool should_enable_tweaks(void)
 	return true;
 }
 
+
+#include "envbuf.h"
+
 #define POSIX_SPAWN_PROC_TYPE_DRIVER 0x700
 int posix_spawnattr_getprocesstype_np(const posix_spawnattr_t * __restrict, int * __restrict) __API_AVAILABLE(macos(10.8), ios(6.0));
 
@@ -281,6 +284,10 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 								int (*set_process_debugged)(uint64_t pid, bool fullyDebugged), 
 								double jetsamMultiplier)
 {
+	if(!path) { //Don't crash here due to bad posix_spawn call
+		return posix_spawn_hook_shared(pidp, path, desc, argv, envp, orig, trust_binary, set_process_debugged, jetsamMultiplier);
+	}
+
 	if(!desc || !desc->attrp) {
 		posix_spawnattr_t attr=NULL;
 		posix_spawnattr_init(&attr);
@@ -309,13 +316,20 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 		if (jbclient_patch_exec_add(path, should_resume) != 0) { // jdb fault?
 			//restore flags
 			posix_spawnattr_setflags(attrp, flags);
-			return 99;
+			return 199;
 		}
 	}
 
+	// on some devices dyldhook may fail due to vm_protect(VM_PROT_READ|VM_PROT_WRITE), 2, (os/kern) protection failure in dsc::__DATA_CONST:__const, 
+	// so we need to disable dyld-in-cache here. (or we can use VM_PROT_READ|VM_PROT_WRITE|VM_PROT_COPY)
+	char **envc = envbuf_mutcopy((const char **)envp);
+	envbuf_setenv(&envc, "DYLD_IN_CACHE", "0");
+
 	int pid = 0;
-	int ret = posix_spawn_hook_shared(&pid, path, desc, argv, envp, orig, trust_binary, set_process_debugged, jetsamMultiplier);
+	int ret = posix_spawn_hook_shared(&pid, path, desc, argv, envc, orig, trust_binary, set_process_debugged, jetsamMultiplier);
 	if (pidp) *pidp = pid;
+
+	envbuf_free(envc);
 
 	// maybe caller will use it again? restore flags
 	posix_spawnattr_setflags(attrp, flags);
@@ -329,7 +343,7 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 		if (should_suspend) {
 			if(jbclient_patch_spawn(pid, should_resume) != 0) { // jdb fault? kill
 				kill(pid, SIGKILL);
-				return 98;
+				return 198;
 			}
 		}
 	}
@@ -386,6 +400,7 @@ int __execve_hook(const char *path, char *const argv[], char *const envp[])
 #include <stdio.h>
 #include <libproc.h>
 #include <libproc_private.h>
+#include <sys/sysctl.h>
 
 //some process may be killed by sandbox if call systme getppid()
 pid_t __getppid()
@@ -397,15 +412,54 @@ pid_t __getppid()
     return procInfo.pbi_ppid;
 }
 
-#define CONTAINER_PATH_PREFIX   "/private/var/mobile/Containers/Data/" // +/Application,PluginKitPlugin,InternalDaemon
+static uid_t _CFGetSVUID(bool *successful) {
+    uid_t uid = -1;
+    struct kinfo_proc kinfo;
+    u_int miblen = 4;
+    size_t  len;
+    int mib[miblen];
+    int ret;
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+    len = sizeof(struct kinfo_proc);
+    ret = sysctl(mib, miblen, &kinfo, &len, NULL, 0);
+    if (ret != 0) {
+        uid = -1;
+        *successful = false;
+    } else {
+        uid = kinfo.kp_eproc.e_pcred.p_svuid;
+        *successful = true;
+    }
+    return uid;
+}
 
-void redirectEnvPath(const char* rootdir)
+bool _CFCanChangeEUIDs(void) {
+    static bool canChangeEUIDs;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        uid_t euid = geteuid();
+        uid_t uid = getuid();
+        bool gotSVUID = false;
+        uid_t svuid = _CFGetSVUID(&gotSVUID);
+        canChangeEUIDs = (uid == 0 || uid != euid || svuid != euid || !gotSVUID);
+    });
+    return canChangeEUIDs;
+}
+
+void loadPathHook()
 {
-    // char executablePath[PATH_MAX]={0};
-    // uint32_t bufsize=sizeof(executablePath);
-    // if(_NSGetExecutablePath(executablePath, &bufsize)==0 && strstr(executablePath,"testbin2"))
-    //     printf("redirectNSHomeDir %s, %s\n\n", rootdir, getenv("CFFIXED_USER_HOME"));
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+		void* roothidehooks = dlopen(JBROOT_PATH("/basebin/roothidehooks.dylib"), RTLD_NOW);
+		void (*pathhook)() = dlsym(roothidehooks, "pathhook");
+		pathhook();
+	});
+}
 
+void redirect_path_env(const char* rootdir)
+{
     //for now libSystem should be initlized, container should be set.
 
     char* homedir = NULL;
@@ -421,6 +475,7 @@ We just keep this bug:
         homedir = getenv("CFFIXED_USER_HOME");
         if(homedir)
         {
+#define CONTAINER_PATH_PREFIX   "/private/var/mobile/Containers/Data/" // +/Application,PluginKitPlugin,InternalDaemon
             if(strncmp(homedir, CONTAINER_PATH_PREFIX, sizeof(CONTAINER_PATH_PREFIX)-1) == 0)
             {
                 return; //containerized
@@ -453,7 +508,7 @@ We just keep this bug:
     setenv("CFFIXED_USER_HOME", newhome, 1);
 }
 
-void redirectDirs(const char* rootdir)
+void redirect_paths(const char* rootdir)
 {
     do {
         
@@ -477,7 +532,11 @@ void redirectDirs(const char* rootdir)
             break;
 
         //for jailbroken binaries
-        redirectEnvPath(rootdir);
+        redirect_path_env(rootdir);
+		
+		if(_CFCanChangeEUIDs()) {
+			loadPathHook();
+		}
     
         pid_t ppid = __getppid();
         assert(ppid > 0);
@@ -500,46 +559,22 @@ __attribute__((visibility("default"))) int PLRequiredJIT() {
 	return 0;
 }
 
-extern void* _dyld_get_shared_cache_range(size_t* length);
-
-int syscall_issetugid();
-int new_issetugidhook()
-{
-	void* caller = __builtin_return_address(0);
-
-	size_t length=0;
-	void* start = _dyld_get_shared_cache_range(&length);
-
-	if((uint64_t)caller >= (uint64_t)start  &&  (uint64_t)caller < ((uint64_t)start+length))
-	{
-		return 0;
-	}
-
-	return syscall_issetugid();
-}
-
 char HOOK_DYLIB_PATH[PATH_MAX] = {0};
 
 __attribute__((constructor)) static void initializer(void)
 {
+//////////////////////////////////////////////
+	struct dl_info di={0};
+	dladdr((void*)initializer, &di);
+	strlcpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
+/////////////////////////////////////////////////////////////////////////
+
 	// Tell jbserver (in launchd) that this process exists
 	// This will disable page validation, which allows the rest of this constructor to apply hooks
 	if (jbclient_process_checkin(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions, &gFullyDebugged) != 0) return;
 
-//////////////////////////////////////////////////////////////////////////
-	struct dl_info di={0};
-	dladdr((void*)initializer, &di);
-	strncpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
-
-	redirectDirs(JB_RootPath);
-	
-	// litehook_hook_function((void *)&issetugid, (void *)&new_issetugidhook);
-//////////////////////////////////////////////////////////////////////////
-
 	// Apply sandbox extensions
 	apply_sandbox_extensions();
-
-	dlopen(JBROOT_PATH("/usr/lib/roothideinit.dylib"), RTLD_NOW);
 
 	// Unset DYLD_INSERT_LIBRARIES, but only if systemhook itself is the only thing contained in it
 	// Feeable attempt at making jailbreak detection harder
@@ -580,6 +615,20 @@ __attribute__((constructor)) static void initializer(void)
 		dyld_hook_routine(*gDyldPtr, 97, (void *)&dyld_dlopen_from_hook, (void **)&dyld_dlopen_from_orig, 0xD48C);
 		dyld_hook_routine(*gDyldPtr, 98, (void *)&dyld_dlopen_audited_hook, (void **)&dyld_dlopen_audited_orig, 0xD2A5);
 	}
+
+//////////////////////////////////////////////////////////////////////
+  /* after unsandboxing jbroot and applying dyldhooks */
+
+	const char* DYLD_IN_CACHE = getenv("DYLD_IN_CACHE");
+	if(strcmp(DYLD_IN_CACHE, "0") == 0) {
+		unsetenv("DYLD_IN_CACHE");
+	}
+
+	redirect_paths(JB_RootPath);
+
+	dlopen(JBROOT_PATH("/usr/lib/roothideinit.dylib"), RTLD_NOW);
+	
+//////////////////////////////////////////////////////////////////////////
 
 #ifdef __arm64e__
 	// Since pages have been modified in this process, we need to load forkfix to ensure forking will work
@@ -629,6 +678,10 @@ __attribute__((constructor)) static void initializer(void)
 				litehook_hook_function(__sysctl, __sysctl_hook);
 				litehook_hook_function(__sysctlbyname, __sysctlbyname_hook);
 			}
+		}
+
+		if(string_has_suffix(gExecutablePath, "/Dopamine.app/Dopamine")) {
+			loadPathHook();
 		}
 
 		dlopen(JBROOT_PATH("/usr/lib/roothidepatch.dylib"), RTLD_NOW); //require jit
