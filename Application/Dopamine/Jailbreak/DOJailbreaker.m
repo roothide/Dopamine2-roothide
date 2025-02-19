@@ -92,10 +92,10 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
         if (xpf_set_is_supported("amfi_oids")) {
             sets[idx++] = "amfi_oids";
         }
+        
         if (xpf_set_is_supported("devmode")) {
             sets[idx++] = "devmode"; 
         }
-
         if (xpf_set_is_supported("badRecovery")) {
             sets[idx++] = "badRecovery"; 
         }
@@ -594,6 +594,8 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     *errOut = [self injectLaunchdHook];
     if (*errOut) return;
     
+    // don't use dyld-in-cache due to dyldhooks
+    setenv("DYLD_IN_CACHE", "0", 1);
     // don't load tweak during jailbreaking
     setenv("DISABLE_TWEAKS", "1", 1);
     // using the stock path during jailbreaking
@@ -610,10 +612,10 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Applying Bind Mount") debug:NO];
     *errOut = [self createFakeLib];
     if (*errOut) return;
-*/
     
     // Unsandbox iconservicesagent so that app icons can work
     exec_cmd_trusted(JBROOT_PATH("/usr/bin/killall"), "-9", "iconservicesagent", NULL);
+*/
     
     *errOut = [self finalizeBootstrapIfNeeded];
     if (*errOut) return;
