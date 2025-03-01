@@ -2,7 +2,7 @@ name: "*** build tipa file ***"
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # every 2 days
+    - cron: '0 0 */7 * *' # every 7 days
   workflow_dispatch:
 
 concurrency:
