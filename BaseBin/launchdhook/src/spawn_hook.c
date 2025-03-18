@@ -18,6 +18,8 @@ extern int platform_set_process_debugged(uint64_t pid, bool fullyDebugged);
 extern bool gInEarlyBoot;
 extern bool gFirstLoad;
 
+#define POSIX_SPAWN_START_SUSPENDED_CUSTOMED	0x2000 // _POSIX_SPAWN_ALLOW_DATA_EXEC(0x2000) only used in DEBUG/DEVELOPMENT kernel
+
 void early_boot_done(void)
 {
 	gInEarlyBoot = false;
@@ -269,6 +271,7 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 		if(ret==0 && pid>0) {
 
 			proc_csflags_patch(pid);
+			platform_set_process_debugged(pid, false);
 			
 			short flags = 0;
 			posix_spawnattr_getflags(attrp, &flags);
@@ -291,7 +294,8 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 	bool set_debugged = (flags & POSIX_SPAWN_START_SUSPENDED) != 0;
 
     if (should_suspend) {
-        posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
+        //posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
+	posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED_CUSTOMED);
     }
 
 	// on some devices dyldhook may fail due to vm_protect(VM_PROT_READ|VM_PROT_WRITE), 2, (os/kern) protection failure in dsc::__DATA_CONST:__const, 
@@ -306,7 +310,7 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 
 	envbuf_free(envc);
 	
-	posix_spawnattr_setflags(attrp, flags); // maybe caller will use it again?
+	posix_spawnattr_setflags(attrp, flags| POSIX_SPAWN_START_SUSPENDED_CUSTOMED); // maybe caller will use it again?
 
     if (ret != 0){
         JBLogDebug("spawn error ret=%d errno=%d err=%s", ret, errno, strerror(errno));
