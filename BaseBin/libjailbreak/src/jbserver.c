@@ -27,7 +27,7 @@ int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xms
 	it will return ENOENT if the original executable file of a running process is removed from disk (e.g.  upgrading/reinstalling a package) */
 	if (proc_pidpath(pid, callerPath, sizeof(callerPath)) > 0) {
 		if (isBlacklisted(callerPath)) {
-			return -1;
+			//return -1;
 		}
 	}
 
