@@ -224,7 +224,7 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
             // Suspend launchd and patch GET_TASK_ALLOW in boomerang
             short flags = 0;
             posix_spawnattr_getflags(attrp, &flags);
-            posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
+            posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED | POSIX_SPAWN_START_SUSPENDED_CUSTOMED);
 
 			// Always use environ instead of envp, as boomerang_stashPrimitives calls setenv
 			// setenv / unsetenv can sometimes cause environ to get reallocated
