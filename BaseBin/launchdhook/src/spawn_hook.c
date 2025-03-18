@@ -267,6 +267,9 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 		envbuf_free(envc);
 
 		if(ret==0 && pid>0) {
+
+			proc_csflags_patch(pid);
+			
 			short flags = 0;
 			posix_spawnattr_getflags(attrp, &flags);
 			if((flags & POSIX_SPAWN_START_SUSPENDED) != 0) {
