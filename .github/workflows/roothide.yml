@@ -77,6 +77,6 @@ jobs:
         id: dopamine-latest-upload
         uses: actions/upload-artifact@v4
         with:
-          name: xzroothide-Dopamine2-v${{ env.tag }}.tipa.zip
+          name: roothide-Dopamine2-v${{ env.tag }}.tipa
           path: |
-            ${{ github.workspace }}/Application/roothide-Dopamine2-v${{ env.tag }}.tipa
+            ${{ github.workspace }}/Application/roothide-Dopamine2-v${{ env.tag }}.tipa.zip
