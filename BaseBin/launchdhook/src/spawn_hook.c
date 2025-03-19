@@ -252,6 +252,7 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 		return __posix_spawn_orig_wrapper(pidp, path, desc, argv, envp);
 	}
 
+	/*
     if (isBlacklisted(path)) {
         JBLogDebug("blacklisted app %s", path);
 
@@ -282,6 +283,7 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 
         return ret;
     }
+	*/
 
     short flags = 0;
     posix_spawnattr_getflags(attrp, &flags);
