@@ -30,7 +30,7 @@ int sandbox_check_by_audit_token_hook(audit_token_t au, const char *operation, i
 				pid_t pid = audit_token_to_pid(au);
 				if(pid>0 && proc_pidpath(pid, pathbuf, sizeof(pathbuf))>0) {
 					if(isBlacklisted(pathbuf)) {
-						allow=false;
+						//allow=false;
 					} 
 				}
 				
