@@ -259,9 +259,20 @@ int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _
 		envbuf_unsetenv(&envc, "_SafeMode");
 		envbuf_unsetenv(&envc, "_MSSafeMode");
 
+		int pid = 0;
+		if (!pidp) pidp = &pid;
         int ret = __posix_spawn_orig_wrapper(pidp, path, desc, argv, envc);
+		pid = *pidp;
 
 		envbuf_free(envc);
+
+		if(ret==0 && pid>0) {
+			short flags = 0;
+			posix_spawnattr_getflags(attrp, &flags);
+			if((flags & POSIX_SPAWN_START_SUSPENDED) != 0) {
+				platform_set_process_debugged(pid, false);
+			}
+		}
 
         return ret;
     }
