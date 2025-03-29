@@ -284,6 +284,10 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 								int (*set_process_debugged)(uint64_t pid, bool fullyDebugged), 
 								double jetsamMultiplier)
 {
+	if(!path) { //Don't crash here due to bad posix_spawn call
+		return posix_spawn_hook_shared(pidp, path, desc, argv, envp, orig, trust_binary, set_process_debugged, jetsamMultiplier);
+	}
+
 	if(!desc || !desc->attrp) {
 		posix_spawnattr_t attr=NULL;
 		posix_spawnattr_init(&attr);
@@ -312,7 +316,7 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 		if (jbclient_patch_exec_add(path, should_resume) != 0) { // jdb fault?
 			//restore flags
 			posix_spawnattr_setflags(attrp, flags);
-			return 99;
+			return 199;
 		}
 	}
 
@@ -339,7 +343,7 @@ int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, s
 		if (should_suspend) {
 			if(jbclient_patch_spawn(pid, should_resume) != 0) { // jdb fault? kill
 				kill(pid, SIGKILL);
-				return 98;
+				return 198;
 			}
 		}
 	}
@@ -562,7 +566,7 @@ __attribute__((constructor)) static void initializer(void)
 //////////////////////////////////////////////
 	struct dl_info di={0};
 	dladdr((void*)initializer, &di);
-	strncpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
+	strlcpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
 /////////////////////////////////////////////////////////////////////////
 
 	// Tell jbserver (in launchd) that this process exists
@@ -676,7 +680,7 @@ __attribute__((constructor)) static void initializer(void)
 			}
 		}
 
-		if(string_has_suffix(gExecutablePath, "Dopamine.app/Dopamine")) {
+		if(string_has_suffix(gExecutablePath, "/Dopamine.app/Dopamine")) {
 			loadPathHook();
 		}
 
