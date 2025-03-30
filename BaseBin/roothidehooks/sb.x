@@ -88,6 +88,62 @@ bool is_sub_path(const char* parent, const char* child)
 
 %end
 
+static const void *kDenyQueryTagKey = &kDenyQueryTagKey;
+
+%hook FBSApplicationLibrary
+-(id)applicationInfoForBundleIdentifier:(NSString*)bundleIdentifier
+{
+	id result = %orig; //SBApplicationInfo
+	NSURL* executableURL = [result performSelector:@selector(executableURL)];
+	NSLog(@"FBSApplicationLibrary applicationInfoForBundleIdentifier %@ : %@, %@", bundleIdentifier, result, executableURL);
+
+	NSNumber* tag = objc_getAssociatedObject(bundleIdentifier, kDenyQueryTagKey);
+
+	if(tag && tag.boolValue) {
+
+		if([SENSITIVE_APP_LIST containsObject:bundleIdentifier]) {
+			NSLog(@"FBSApplicationLibrary deny query %@", bundleIdentifier);
+			return nil;
+		}
+
+		if(result && executableURL && isJailbreakPath(executableURL.path.fileSystemRepresentation)) {
+			NSLog(@"FBSApplicationLibrary deny query %@", bundleIdentifier);
+			return nil;
+		}
+	}
+
+	return result;
+}
+%end
+
+%hook FBSystemService
+-(void*)openApplication:(NSString*)bundleIdentifier withOptions:(id)options originator:(id)originator requestID:(void*)requestID completion:(void*)completion
+{
+	NSLog(@"openApplication %@ withOptions:%p originator:%p requestID:%p completion:%p", bundleIdentifier, options, originator, requestID, completion);
+
+	id currentContext = [NSClassFromString(@"BSServiceConnection") performSelector:@selector(currentContext)];
+	id remoteProcess = [currentContext performSelector:@selector(remoteProcess)]; //BSProcessHandle
+
+	NSNumber* _pid = [remoteProcess valueForKey:@"_pid"];
+	NSString* _bundleID = [remoteProcess valueForKey:@"_bundleID"];
+
+	pid_t pid = _pid.intValue;
+
+	uint32_t csFlags = 0;
+	csops(pid, CS_OPS_STATUS, &csFlags, sizeof(csFlags));
+
+	NSLog(@"openApplication %@ from pid=%d bundleID=%@ csFalgs=%x", bundleIdentifier, pid, _bundleID, csFlags);
+
+	if(pid > 0 && (csFlags & CS_PLATFORM_BINARY)==0) {
+		if(isBlacklistedApp(_bundleID)) {
+			NSLog(@"openApplication deny request from %@", _bundleID);
+			objc_setAssociatedObject(bundleIdentifier, kDenyQueryTagKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+		}
+	}
+
+	return %orig;
+}
+%end
 
 void sbInit(void)
 {
