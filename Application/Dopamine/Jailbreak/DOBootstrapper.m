@@ -844,34 +844,46 @@ NSString* rootfsPrefix(NSString* path)
 #define STRAPLOG(...)   [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@__VA_ARGS__] debug:YES];
 #define ASSERT(...)     do{if(!(__VA_ARGS__)) {completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"ABORT: %s (%d): %s", __FILE_NAME__, __LINE__, #__VA_ARGS__]}]);return -1;}} while(0)
 
+// #define DEFAULT_SOURCES "\
+// Types: deb\n\
+// URIs: https://yourepo.com/\n\
+// Suites: ./\n\
+// Components:\n\
+// \n\
+// Types: deb\n\
+// URIs: https://repo.chariz.com/\n\
+// Suites: ./\n\
+// Components:\n\
+// \n\
+// Types: deb\n\
+// URIs: https://havoc.app/\n\
+// Suites: ./\n\
+// Components:\n\
+// \n\
+// Types: deb\n\
+// URIs: http://apt.thebigboss.org/repofiles/cydia/\n\
+// Suites: stable\n\
+// Components: main\n\
+// \n\
+// Types: deb\n\
+// URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/\n\
+// Suites: ./\n\
+// Components:\n\
+// \n\
+// Types: deb\n\
+// URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/procursus\n\
+// Suites: iphoneos-arm64e/%d\n\
+// Components: main\n\
+// "
+
 #define DEFAULT_SOURCES "\
 Types: deb\n\
-URIs: https://yourepo.com/\n\
+URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/\n\
 Suites: ./\n\
 Components:\n\
 \n\
 Types: deb\n\
-URIs: https://repo.chariz.com/\n\
-Suites: ./\n\
-Components:\n\
-\n\
-Types: deb\n\
-URIs: https://havoc.app/\n\
-Suites: ./\n\
-Components:\n\
-\n\
-Types: deb\n\
-URIs: http://apt.thebigboss.org/repofiles/cydia/\n\
-Suites: stable\n\
-Components: main\n\
-\n\
-Types: deb\n\
-URIs: https://roothide.github.io/\n\
-Suites: ./\n\
-Components:\n\
-\n\
-Types: deb\n\
-URIs: https://roothide.github.io/procursus\n\
+URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/procursus\n\
 Suites: iphoneos-arm64e/%d\n\
 Components: main\n\
 "
@@ -888,15 +900,34 @@ Suites: iphoneos-arm64e/%d\n\
 Components: main\n\
 "
 
+// #define ALT_SOURCES "\
+// Types: deb\n\
+// URIs: https://iosjb.top/\n\
+// Suites: ./\n\
+// Components:\n\
+// \n\
+// Types: deb\n\
+// URIs: https://iosjb.top/procursus\n\
+// Suites: iphoneos-arm64e/%d\n\
+// Components: main\n\
+// "
+
 #define ZEBRA_SOURCES "\
 # Zebra Sources List\n\
-deb https://getzbra.com/repo/ ./\n\
-deb https://repo.chariz.com/ ./\n\
-deb https://yourepo.com/ ./\n\
-deb https://havoc.app/ ./\n\
-deb https://roothide.github.io/ ./\n\
-deb https://roothide.github.io/procursus iphoneos-arm64e/%d main\n\
+deb http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/ ./\n\
+deb http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/procursus iphoneos-arm64e/%d main\n\
 \n\
+"
+
+// #define ZEBRA_SOURCES "\
+// # Zebra Sources List\n\
+// deb https://getzbra.com/repo/ ./\n\
+// deb https://repo.chariz.com/ ./\n\
+// deb https://yourepo.com/ ./\n\
+// deb https://havoc.app/ ./\n\
+// deb http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/ ./\n\
+// deb http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/procursus iphoneos-arm64e/%d main\n\
+// \n\
 "
 
 int getCFMajorVersion(void)
