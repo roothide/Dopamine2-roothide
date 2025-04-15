@@ -77,7 +77,7 @@ jobs:
           done;
           plutil -insert items.$DOCreditsCellIndex.names -xml "<dict><key>name</key><string>${{ github.actor }}</string><key>link</key><string>https://github.com/${{ github.repository }}</string></dict>" -append ./Application/Dopamine/UI/Settings/Credits.plist
           gmake -j$(sysctl -n hw.physicalcpu)
-          TAG=$(git describe --tags --abbrev=0)
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "untagged")
           mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-v${TAG}.tipa"
           echo "tag=${TAG}" >> $GITHUB_ENV
 
