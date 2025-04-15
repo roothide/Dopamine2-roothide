@@ -1,9 +1,12 @@
 name: "*** build tipa file ***"
 
 on:
-  schedule:
-    - cron: '0 */2 * * *' # every 2 hours
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "选择需要运行的分支"
+        required: true
+        default: "main"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,8 +19,9 @@ jobs:
       - name: Checkout
         run: |
           set -x
-          git clone --recursive https://github.com/roothide/Dopamine2-roothide ${{ github.workspace }}
-          
+          # 使用指定分支克隆仓库
+          git clone --branch ${{ github.event.inputs.branch }} --recursive https://github.com/kuekiko/Dopamine2-roothide.git ${{ github.workspace }}
+      
       - name: Install Procursus
         uses: dhinakg/procursus-action@main
         with:
@@ -66,7 +70,11 @@ jobs:
           export BASEDIR="$(pwd)"
           export THEOS="${BASEDIR}/theos"
           typeset itemcount=$(plutil -extract items raw -expect array ./Application/Dopamine/UI/Settings/Credits.plist)
-          for ((i=0; i<$itemcount; i++)); do if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then DOCreditsCellIndex=$i; fi done;
+          for ((i=0; i<$itemcount; i++)); do 
+            if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then 
+              DOCreditsCellIndex=$i; 
+            fi 
+          done;
           plutil -insert items.$DOCreditsCellIndex.names -xml "<dict><key>name</key><string>${{ github.actor }}</string><key>link</key><string>https://github.com/${{ github.repository }}</string></dict>" -append ./Application/Dopamine/UI/Settings/Credits.plist
           gmake -j$(sysctl -n hw.physicalcpu)
           TAG=$(git describe --tags --abbrev=0)
