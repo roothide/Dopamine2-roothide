@@ -2,11 +2,6 @@ name: "*** build tipa file ***"
 
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: "选择需要运行的分支"
-        required: true
-        default: "main"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,7 +15,7 @@ jobs:
         run: |
           set -x
           # 使用指定分支克隆仓库
-          git clone --branch ${{ github.event.inputs.branch }} --recursive https://github.com/kuekiko/Dopamine2-roothide.git ${{ github.workspace }}
+          git clone --branch ${{ github.ref_name }} --recursive https://github.com/kuekiko/Dopamine2-roothide.git ${{ github.workspace }}
       
       - name: Install Procursus
         uses: dhinakg/procursus-action@main
