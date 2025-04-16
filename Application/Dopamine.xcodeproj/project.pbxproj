@@ -94,7 +94,6 @@
 		8C4ABEB62B52094100B43C9B /* libjailbreak.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */; };
 		8C4ABEB92B520E7B00B43C9B /* libjailbreak.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */; platformFilter = ios; };
 		8C4ABEBE2B52274300B43C9B /* DOPreferenceManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 8C4ABEBD2B52274300B43C9B /* DOPreferenceManager.m */; };
-		8C512B912B5C9F9100C6F14A /* sileo.deb in Resources */ = {isa = PBXBuildFile; fileRef = 8C512B8B2B5C9DE800C6F14A /* sileo.deb */; };
 		8C512B922B5C9F9400C6F14A /* zebra.deb in Resources */ = {isa = PBXBuildFile; fileRef = 8C512B8C2B5C9DE800C6F14A /* zebra.deb */; };
 		8C56D4BF2B7C0DF2001C03D3 /* LICENSE_ChOma.md in Resources */ = {isa = PBXBuildFile; fileRef = 8C56D4B82B7C0DF2001C03D3 /* LICENSE_ChOma.md */; };
 		8C56D4C02B7C0DF2001C03D3 /* LICENSE_Fugu15_Rootful.md in Resources */ = {isa = PBXBuildFile; fileRef = 8C56D4B92B7C0DF2001C03D3 /* LICENSE_Fugu15_Rootful.md */; };
@@ -202,6 +201,8 @@
 		8CDD08482B4F6DF100A32B61 /* libxpf.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08442B4F6DD800A32B61 /* libxpf.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		8CDD08492B4F6DF500A32B61 /* libjailbreak.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		8CDD084A2B4F6DF800A32B61 /* libchoma.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08432B4F6DD800A32B61 /* libchoma.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A40AC6A82DAF6157004589BF /* sileo.deb in Frameworks */ = {isa = PBXBuildFile; fileRef = A40AC6A72DAF6157004589BF /* sileo.deb */; };
+		A40AC6AA2DAF617F004589BF /* core.deb in Frameworks */ = {isa = PBXBuildFile; fileRef = A40AC6A92DAF617F004589BF /* core.deb */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -430,7 +431,6 @@
 		8C46D7202B588875002899DB /* zdict.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = zdict.h; sourceTree = "<group>"; };
 		8C4ABEBC2B52274300B43C9B /* DOPreferenceManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DOPreferenceManager.h; sourceTree = "<group>"; };
 		8C4ABEBD2B52274300B43C9B /* DOPreferenceManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DOPreferenceManager.m; sourceTree = "<group>"; };
-		8C512B8B2B5C9DE800C6F14A /* sileo.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = sileo.deb; sourceTree = "<group>"; };
 		8C512B8C2B5C9DE800C6F14A /* zebra.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = zebra.deb; sourceTree = "<group>"; };
 		8C56D4B82B7C0DF2001C03D3 /* LICENSE_ChOma.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = LICENSE_ChOma.md; sourceTree = "<group>"; };
 		8C56D4B92B7C0DF2001C03D3 /* LICENSE_Fugu15_Rootful.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = LICENSE_Fugu15_Rootful.md; sourceTree = "<group>"; };
@@ -540,6 +540,8 @@
 		8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjailbreak.dylib; path = ../BaseBin/.build/libjailbreak.dylib; sourceTree = "<group>"; };
 		8CDD08432B4F6DD800A32B61 /* libchoma.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libchoma.dylib; path = ../BaseBin/.build/libchoma.dylib; sourceTree = "<group>"; };
 		8CDD08442B4F6DD800A32B61 /* libxpf.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libxpf.dylib; path = ../BaseBin/.build/libxpf.dylib; sourceTree = "<group>"; };
+		A40AC6A72DAF6157004589BF /* sileo.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = sileo.deb; sourceTree = "<group>"; };
+		A40AC6A92DAF617F004589BF /* core.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = core.deb; sourceTree = "<group>"; };
 		C075B0CB2B8F2BCE009A26BB /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -594,6 +596,8 @@
 				8CDD08412B4F6D8700A32B61 /* libgrabkernel2.a in Frameworks */,
 				51F19D052BBF456200896361 /* libpartial.a in Frameworks */,
 				042479E52B66B0DD0082581B /* Preferences.framework in Frameworks */,
+				A40AC6A82DAF6157004589BF /* sileo.deb in Frameworks */,
+				A40AC6AA2DAF617F004589BF /* core.deb in Frameworks */,
 				8C029F662B4E2E970071DE58 /* libcompression.tbd in Frameworks */,
 				8C58E5592B7EAF8000E3ADAA /* CoreServices.framework in Frameworks */,
 				8C4ABEB62B52094100B43C9B /* libjailbreak.dylib in Frameworks */,
@@ -1101,17 +1105,18 @@
 		8CB94F012B59E16D0098BAFD /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A40AC6A72DAF6157004589BF /* sileo.deb */,
 				8415E3B22BE40011001F31A8 /* Dopamine.roothide */,
 				84F267E92BB7292C00DD3323 /* roothideapp.deb */,
 				8C05C59E2B759F8A0097A931 /* bootstrap_1800.tar.zst */,
 				8C05C59D2B759F8A0097A931 /* bootstrap_1900.tar.zst */,
 				8CB94F032B59E17A0098BAFD /* basebin.tar */,
 				8CB94F022B59E17A0098BAFD /* basebin.tc */,
-				8C512B8B2B5C9DE800C6F14A /* sileo.deb */,
 				8C512B8C2B5C9DE800C6F14A /* zebra.deb */,
 				8C609C992C19AC250023DD12 /* libkrw-dopamine.deb */,
 				8CCD8A832B6F165A004B72B0 /* libroot.dylib */,
 				8CCD2FC32B77AA9200F9C5DA /* basebin-link.deb */,
+				A40AC6A92DAF617F004589BF /* core.deb */,
 				04DD0B362B7BA6180055DE4F /* LICENSE.md */,
 				04DD0B392B7BF3E80055DE4F /* LICENSE_libc.md */,
 				8C56D4B82B7C0DF2001C03D3 /* LICENSE_ChOma.md */,
@@ -1508,7 +1513,6 @@
 				8C05C59F2B75A1770097A931 /* bootstrap_1800.tar.zst in Resources */,
 				042479A42B66916B0082581B /* Credits.plist in Resources */,
 				8C2875212BD850B4008B24DA /* LICENSE_libgrabkernel2.md in Resources */,
-				8C512B912B5C9F9100C6F14A /* sileo.deb in Resources */,
 				8C512B922B5C9F9400C6F14A /* zebra.deb in Resources */,
 				8CCD8A882B6F16D0004B72B0 /* libroot.dylib in Resources */,
 				8C296BAE2BE05914007C2AD1 /* LICENSE_plooshinit.md in Resources */,
@@ -1822,6 +1826,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Dopamine/Exploits/badRecovery/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = badRecovery;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1858,6 +1863,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Dopamine/Exploits/badRecovery/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = badRecovery;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1892,6 +1898,7 @@
 				ENABLE_MODULE_VERIFIER = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Dopamine/Exploits/dmaFail/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = dmaFail;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -1926,6 +1933,7 @@
 				ENABLE_MODULE_VERIFIER = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/Dopamine/Exploits/dmaFail/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = dmaFail;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
