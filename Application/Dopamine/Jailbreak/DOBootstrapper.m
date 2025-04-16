@@ -956,7 +956,7 @@ int getCFMajorVersion(void)
     
     return 0;
 }
-
+¬
 -(int) InstallBootstrap:(NSString*)installPath WithCompletion:(void (^)(NSError *))completion
 {
     [[DOUIManager sharedInstance] sendLog:@"Extracting Bootstrap" debug:NO];
@@ -1283,11 +1283,15 @@ int getCFMajorVersion(void)
             return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"prep_bootstrap.sh returned %d\n", r]}];
         }
         
-        NSError *error = [self installPackageManagers];
-        if (error) return error;
-        
+        // NSError *error = [self installPackageManagers];
+        // if (error) return error;
+        // 
+        NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
+        r = [self installPackage:coreManager];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install coreManager: %d\n", r]}];
+
         NSString *roothideManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"roothideapp.deb"];
-         r = [self installPackage:roothideManager];
+        r = [self installPackage:roothideManager];
         if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install roothideManager: %d\n", r]}];
     }
     else
