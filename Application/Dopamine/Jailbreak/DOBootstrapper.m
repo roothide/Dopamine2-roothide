@@ -743,7 +743,7 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
 
 @implementation DOBootstrapper(roothide)
 
-uint64_t jbrand_new()
+uint64_t jbrand_new(void)
 {
     uint64_t value = ((uint64_t)arc4random()) | ((uint64_t)arc4random())<<32;
     uint8_t check = value>>8 ^ value >> 16 ^ value>>24 ^ value>>32 ^ value>>40 ^ value>>48 ^ value>>56;
@@ -828,7 +828,7 @@ NSString *jbroot(NSString *path)
     return [jbroot stringByAppendingPathComponent:path];
 }
 
-uint64_t jbrand()
+uint64_t jbrand(void)
 {
     NSString* jbroot = find_jbroot(NO);
     assert(jbroot != NULL);
@@ -956,7 +956,7 @@ int getCFMajorVersion(void)
     
     return 0;
 }
-¬
+
 -(int) InstallBootstrap:(NSString*)installPath WithCompletion:(void (^)(NSError *))completion
 {
     [[DOUIManager sharedInstance] sendLog:@"Extracting Bootstrap" debug:NO];
@@ -1360,7 +1360,7 @@ int getCFMajorVersion(void)
     NSFileManager* fm = NSFileManager.defaultManager;
     
     NSString* dirpath = @"/var/containers/Bundle/Application/";
-    for(NSString* item in [fm directoryContentsAtPath:dirpath])
+    for(NSString* item in [fm contentsOfDirectoryAtPath:dirpath error:nil])
     {
         if(is_jbroot_name(item.UTF8String)) {
             STRAPLOG("remove %@ @ %@", item, dirpath);
@@ -1370,7 +1370,7 @@ int getCFMajorVersion(void)
     }
     
     dirpath = @"/var/mobile/Containers/Shared/AppGroup/";
-    for(NSString* item in [fm directoryContentsAtPath:dirpath])
+    for(NSString* item in [fm contentsOfDirectoryAtPath:dirpath error:nil])
     {
         if(is_jbroot_name(item.UTF8String)) {
             STRAPLOG("remove %@ @ %@", item, dirpath);
