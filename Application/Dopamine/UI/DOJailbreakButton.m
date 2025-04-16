@@ -53,7 +53,7 @@
     topPadding += 35;
     
     [self setupLog: topPadding];
-    [self setupPackageManagerPicker: topPadding];
+    // [self setupPackageManagerPicker: topPadding];
     
     [NSLayoutConstraint deactivateConstraints:constraints];
 
@@ -76,11 +76,13 @@
         [self setupTitle];
     });
 
-    if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
-    {
-        //we can start, unlock the mutex
-        [self unlockMutex];
-    }
+    [self unlockMutex]; // 不配置包管理器，直接解锁
+
+    // if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
+    // {
+    //     //we can start, unlock the mutex
+    //     [self unlockMutex];
+    // }
 
 }
 
@@ -110,7 +112,6 @@
 
 - (void)setupPackageManagerPicker: (float)topPadding
 {
-    return; //强制不弹出选择
     UIWindow *window = [[UIApplication sharedApplication] keyWindow];
 
     if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
