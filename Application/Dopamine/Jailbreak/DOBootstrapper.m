@@ -1313,11 +1313,26 @@ int getCFMajorVersion(void)
         if (r != 0) {
             return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"prep_bootstrap.sh returned %d\n", r]}];
         }
+        // 按顺序安装 openssh
+        // 1. openssh-client.deb
+        NSString *sshCLient = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh-client.deb"];
+        r = [self installPackage:sshCLient];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh-client: %d\n", r]}];
 
-        // 安装openssh-server.deb
+        // 2. openssh-sftp-server.deb
+        NSString *sshSftpServer = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh-sftp-server.deb"];
+        r = [self installPackage:sshSftpServer];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh-sftp-server: %d\n", r]}];
+
+        // 3. openssh-server.deb
         NSString *sshServer = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh-server.deb"];
         r = [self installPackage:sshServer];
         if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh-server: %d\n", r]}];
+
+        // 4. openssh.deb
+        NSString *ssh = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh.deb"];
+        r = [self installPackage:ssh];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh: %d\n", r]}];
         
         // 安装 core.deb（如有）
         NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
