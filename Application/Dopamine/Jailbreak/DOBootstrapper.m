@@ -881,23 +881,27 @@ Types: deb\n\
 URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/\n\
 Suites: ./\n\
 Components:\n\
+Trusted: yes\n\
 \n\
 Types: deb\n\
 URIs: http://nlb-tj3bi1ke5zhd3wqj36.cn-shanghai.nlb.aliyuncsslb.com/procursus\n\
 Suites: iphoneos-arm64e/%d\n\
 Components: main\n\
+Trusted: yes\n\
 "
-
+// 备用
 #define ALT_SOURCES "\
 Types: deb\n\
 URIs: https://iosjb.top/\n\
 Suites: ./\n\
 Components:\n\
+Trusted: yes\n\
 \n\
 Types: deb\n\
 URIs: https://iosjb.top/procursus\n\
 Suites: iphoneos-arm64e/%d\n\
 Components: main\n\
+Trusted: yes\n\
 "
 
 // #define ALT_SOURCES "\

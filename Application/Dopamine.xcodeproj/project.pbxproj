@@ -202,11 +202,11 @@
 		8CDD08482B4F6DF100A32B61 /* libxpf.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08442B4F6DD800A32B61 /* libxpf.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		8CDD08492B4F6DF500A32B61 /* libjailbreak.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		8CDD084A2B4F6DF800A32B61 /* libchoma.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08432B4F6DD800A32B61 /* libchoma.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		A40AC6B12DAF8446004589BF /* core.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6AF2DAF8418004589BF /* core.deb */; };
 		A40AC6B42DAFB4F9004589BF /* openssh-server.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6B22DAFB4ED004589BF /* openssh-server.deb */; };
 		A40AC6BB2DAFC2CA004589BF /* openssh-client.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6B52DAFC295004589BF /* openssh-client.deb */; };
 		A40AC6BC2DAFC2CA004589BF /* openssh-sftp-server.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6B72DAFC29B004589BF /* openssh-sftp-server.deb */; };
 		A40AC6BD2DAFC2CA004589BF /* openssh.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6B92DAFC2A1004589BF /* openssh.deb */; };
+		A40AC6C02DAFD334004589BF /* core.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6BE2DAFD327004589BF /* core.deb */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -545,11 +545,11 @@
 		8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libjailbreak.dylib; path = ../BaseBin/.build/libjailbreak.dylib; sourceTree = "<group>"; };
 		8CDD08432B4F6DD800A32B61 /* libchoma.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libchoma.dylib; path = ../BaseBin/.build/libchoma.dylib; sourceTree = "<group>"; };
 		8CDD08442B4F6DD800A32B61 /* libxpf.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libxpf.dylib; path = ../BaseBin/.build/libxpf.dylib; sourceTree = "<group>"; };
-		A40AC6AF2DAF8418004589BF /* core.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = core.deb; sourceTree = "<group>"; };
 		A40AC6B22DAFB4ED004589BF /* openssh-server.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = "openssh-server.deb"; sourceTree = "<group>"; };
 		A40AC6B52DAFC295004589BF /* openssh-client.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = "openssh-client.deb"; sourceTree = "<group>"; };
 		A40AC6B72DAFC29B004589BF /* openssh-sftp-server.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = "openssh-sftp-server.deb"; sourceTree = "<group>"; };
 		A40AC6B92DAFC2A1004589BF /* openssh.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = openssh.deb; sourceTree = "<group>"; };
+		A40AC6BE2DAFD327004589BF /* core.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = core.deb; sourceTree = "<group>"; };
 		C075B0CB2B8F2BCE009A26BB /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1123,7 +1123,7 @@
 				A40AC6B72DAFC29B004589BF /* openssh-sftp-server.deb */,
 				A40AC6B92DAFC2A1004589BF /* openssh.deb */,
 				8C512B8C2B5C9DE800C6F14A /* zebra.deb */,
-				A40AC6AF2DAF8418004589BF /* core.deb */,
+				A40AC6BE2DAFD327004589BF /* core.deb */,
 				8C609C992C19AC250023DD12 /* libkrw-dopamine.deb */,
 				8CCD8A832B6F165A004B72B0 /* libroot.dylib */,
 				8CCD2FC32B77AA9200F9C5DA /* basebin-link.deb */,
@@ -1502,11 +1502,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A40AC6C02DAFD334004589BF /* core.deb in Resources */,
 				A40AC6BB2DAFC2CA004589BF /* openssh-client.deb in Resources */,
 				A40AC6BC2DAFC2CA004589BF /* openssh-sftp-server.deb in Resources */,
 				A40AC6BD2DAFC2CA004589BF /* openssh.deb in Resources */,
 				A40AC6B42DAFB4F9004589BF /* openssh-server.deb in Resources */,
-				A40AC6B12DAF8446004589BF /* core.deb in Resources */,
 				8415E3B32BE40011001F31A8 /* Dopamine.roothide in Resources */,
 				84F267EA2BB7292C00DD3323 /* roothideapp.deb in Resources */,
 				8C609C9F2C19B6FA0023DD12 /* libkrw-dopamine.deb in Resources */,
