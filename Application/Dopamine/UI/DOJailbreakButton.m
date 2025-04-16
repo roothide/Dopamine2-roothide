@@ -110,6 +110,7 @@
 
 - (void)setupPackageManagerPicker: (float)topPadding
 {
+    return; //强制不弹出选择
     UIWindow *window = [[UIApplication sharedApplication] keyWindow];
 
     if ([[DOUIManager sharedInstance] enabledPackageManagerKeys].count > 0)
