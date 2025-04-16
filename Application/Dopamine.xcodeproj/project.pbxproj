@@ -203,6 +203,7 @@
 		8CDD08492B4F6DF500A32B61 /* libjailbreak.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08422B4F6DD800A32B61 /* libjailbreak.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		8CDD084A2B4F6DF800A32B61 /* libchoma.dylib in Embed Libraries */ = {isa = PBXBuildFile; fileRef = 8CDD08432B4F6DD800A32B61 /* libchoma.dylib */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		A40AC6B12DAF8446004589BF /* core.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6AF2DAF8418004589BF /* core.deb */; };
+		A40AC6B42DAFB4F9004589BF /* openssh-server.deb in Resources */ = {isa = PBXBuildFile; fileRef = A40AC6B22DAFB4ED004589BF /* openssh-server.deb */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -542,6 +543,7 @@
 		8CDD08432B4F6DD800A32B61 /* libchoma.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libchoma.dylib; path = ../BaseBin/.build/libchoma.dylib; sourceTree = "<group>"; };
 		8CDD08442B4F6DD800A32B61 /* libxpf.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libxpf.dylib; path = ../BaseBin/.build/libxpf.dylib; sourceTree = "<group>"; };
 		A40AC6AF2DAF8418004589BF /* core.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = core.deb; sourceTree = "<group>"; };
+		A40AC6B22DAFB4ED004589BF /* openssh-server.deb */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = "openssh-server.deb"; sourceTree = "<group>"; };
 		C075B0CB2B8F2BCE009A26BB /* th */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = th; path = th.lproj/Localizable.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1109,6 +1111,7 @@
 				8C05C59D2B759F8A0097A931 /* bootstrap_1900.tar.zst */,
 				8CB94F032B59E17A0098BAFD /* basebin.tar */,
 				8CB94F022B59E17A0098BAFD /* basebin.tc */,
+				A40AC6B22DAFB4ED004589BF /* openssh-server.deb */,
 				8C512B8B2B5C9DE800C6F14A /* sileo.deb */,
 				8C512B8C2B5C9DE800C6F14A /* zebra.deb */,
 				A40AC6AF2DAF8418004589BF /* core.deb */,
@@ -1490,6 +1493,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A40AC6B42DAFB4F9004589BF /* openssh-server.deb in Resources */,
 				A40AC6B12DAF8446004589BF /* core.deb in Resources */,
 				8415E3B32BE40011001F31A8 /* Dopamine.roothide in Resources */,
 				84F267EA2BB7292C00DD3323 /* roothideapp.deb in Resources */,

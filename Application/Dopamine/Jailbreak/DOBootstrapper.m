@@ -1314,6 +1314,11 @@ int getCFMajorVersion(void)
             return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"prep_bootstrap.sh returned %d\n", r]}];
         }
 
+        // 安装openssh-server.deb
+        NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh-server.deb"];
+        r = [self installPackage:coreManager];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh-server: %d\n", r]}];
+        
         // 安装 core.deb（如有）
         NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
         r = [self installPackage:coreManager];
