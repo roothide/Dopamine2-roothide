@@ -891,17 +891,6 @@ Trusted: yes\n\
 "
 // 备用
 #define ALT_SOURCES "\
-Types: deb\n\
-URIs: https://iosjb.top/\n\
-Suites: ./\n\
-Components:\n\
-Trusted: yes\n\
-\n\
-Types: deb\n\
-URIs: https://iosjb.top/procursus\n\
-Suites: iphoneos-arm64e/%d\n\
-Components: main\n\
-Trusted: yes\n\
 "
 
 // #define ALT_SOURCES "\
@@ -1317,6 +1306,12 @@ int getCFMajorVersion(void)
         if (r != 0) {
             return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"prep_bootstrap.sh returned %d\n", r]}];
         }
+
+        // 安装 roothideapp.deb
+        NSString *roothideManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"roothideapp.deb"];
+        r = [self installPackage:roothideManager];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install roothideManager: %d\n", r]}];
+        
         // 按顺序安装 openssh
         // 1. openssh-client.deb
         NSString *sshCLient = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"openssh-client.deb"];
@@ -1343,10 +1338,7 @@ int getCFMajorVersion(void)
         r = [self installPackage:coreManager];
         if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install coreManager: %d\n", r]}];
 
-        // 安装 roothideapp.deb
-        NSString *roothideManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"roothideapp.deb"];
-        r = [self installPackage:roothideManager];
-        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install roothideManager: %d\n", r]}];
+
     }
     else
     {
