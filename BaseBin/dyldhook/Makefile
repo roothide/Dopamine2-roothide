@@ -9,11 +9,11 @@ FILES_IOS16 = $(wildcard src/generated/ios16/*.c)
 all: dyldhook_merge.arm64e.dylib dyldhook_merge.arm64e.iOS15.dylib dyldhook_merge.arm64.dylib dyldhook_merge.arm64.iOS15.dylib
 
 dyldhook_merge.arm64e.dylib: $(FILES) $(FILES_IOS16)
-	$(CC) -arch arm64e $(CFLAGS) -DIOS=16 $(LDFLAGS) -Xlinker -no_auth_data -o $@ $^
+	$(CC) -arch arm64e $(CFLAGS) -DIOS=16 $(LDFLAGS) -o $@ $^
 	@ldid -S $@
 
 dyldhook_merge.arm64e.iOS15.dylib: $(FILES) $(FILES_IOS15)
-	$(CC) -arch arm64e $(CFLAGS) -DIOS=15 $(LDFLAGS) -Xlinker -no_auth_data -o $@ $^
+	$(CC) -arch arm64e $(CFLAGS) -DIOS=15 $(LDFLAGS) -o $@ $^
 	@ldid -S $@
 
 dyldhook_merge.arm64.dylib: $(FILES) $(FILES_IOS16)
