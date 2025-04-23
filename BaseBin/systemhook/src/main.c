@@ -1,6 +1,9 @@
 #include "common.h"
+#include "roothider.h"
 
 #include <mach-o/dyld.h>
+#include <mach-o/dyld_images.h>
+#include <mach-o/getsect.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <paths.h>
@@ -9,6 +12,7 @@
 #include <libjailbreak/jbclient_xpc.h>
 #include <libjailbreak/codesign.h>
 #include <libjailbreak/jbroot.h>
+#include "../dyldhook/src/dyld_jbinfo.h"
 #include "litehook.h"
 #include "sandbox.h"
 #include "private.h"
@@ -31,24 +35,29 @@ static int load_executable_path(void)
 }
 
 static char *JB_SandboxExtensions = NULL;
-void apply_sandbox_extensions(void)
+
+void consume_tokenized_sandbox_extensions(char *sandboxExtensions)
 {
-	if (JB_SandboxExtensions) {
-		char *JB_SandboxExtensions_dup = strdup(JB_SandboxExtensions);
-		char *extension = strtok(JB_SandboxExtensions_dup, "|");
-		while (extension != NULL) {
-			sandbox_extension_consume(extension);
-			extension = strtok(NULL, "|");
+	if (sandboxExtensions[0] == '\0') return;
+
+	char *it = sandboxExtensions;
+	char *last = sandboxExtensions;
+	while (*(++it) != '\0') {
+		if (*it == '|') {
+			*it = '\0';
+			sandbox_extension_consume(last);
+			last = &it[1];
+			*it = '|';
 		}
-		free(JB_SandboxExtensions_dup);
 	}
+	sandbox_extension_consume(last);
 }
 
 void *(*sandbox_apply_orig)(void *) = NULL;
 void *sandbox_apply_hook(void *a1)
 {
 	void *r = sandbox_apply_orig(a1);
-	apply_sandbox_extensions();
+	consume_tokenized_sandbox_extensions(JB_SandboxExtensions);
 	return r;
 }
 
@@ -73,47 +82,10 @@ int dyld_hook_routine(void **dyld, int idx, void *hook, void **orig, uint16_t pa
 	return -1;
 }
 
-// All dlopen/dlsym calls use __builtin_return_address(0) to determine what library called it
+// dlsym calls use __builtin_return_address(0) to determine what library called it
 // Since we hook them, if we just call the original function on our own, the return address will always point to systemhook
-// Therefore we must ensure the call to the original function is a tail call, 
-// which ensures that the stack and lr are restored and the compiler turns the call into a direct branch
+// Therefore we must ensure the call to the original function is a tail call, which ensures that the stack and lr are restored and the compiler turns the call into a direct branch
 // This is done via __attribute__((musttail)), this way __builtin_return_address(0) will point to the original calling library instead of systemhook
-
-void* (*dyld_dlopen_orig)(void *dyld, const char* path, int mode);
-void* dyld_dlopen_hook(void *dyld, const char* path, int mode)
-{
-	if (path && !(mode & RTLD_NOLOAD)) {
-		jbclient_trust_library(path, __builtin_return_address(0));
-	}
-    __attribute__((musttail)) return dyld_dlopen_orig(dyld, path, mode);
-}
-
-void* (*dyld_dlopen_from_orig)(void *dyld, const char* path, int mode, void* addressInCaller);
-void* dyld_dlopen_from_hook(void *dyld, const char* path, int mode, void* addressInCaller)
-{
-	if (path && !(mode & RTLD_NOLOAD)) {
-		jbclient_trust_library(path, addressInCaller);
-	}
-	__attribute__((musttail)) return dyld_dlopen_from_orig(dyld, path, mode, addressInCaller);
-}
-
-void* (*dyld_dlopen_audited_orig)(void *dyld, const char* path, int mode);
-void* dyld_dlopen_audited_hook(void *dyld, const char* path, int mode)
-{
-	if (path && !(mode & RTLD_NOLOAD)) {
-		jbclient_trust_library(path, __builtin_return_address(0));
-	}
-	__attribute__((musttail)) return dyld_dlopen_audited_orig(dyld, path, mode);
-}
-
-bool (*dyld_dlopen_preflight_orig)(void *dyld, const char *path);
-bool dyld_dlopen_preflight_hook(void *dyld, const char* path)
-{
-	if (path) {
-		jbclient_trust_library(path, __builtin_return_address(0));
-	}
-	__attribute__((musttail)) return dyld_dlopen_preflight_orig(dyld, path);
-}
 
 void *(*dyld_dlsym_orig)(void *dyld, void *handle, const char *name);
 void *dyld_dlsym_hook(void *dyld, void *handle, const char *name)
@@ -233,18 +205,22 @@ bool should_enable_tweaks(void)
 		}
 	}
 
-	const char *safeModeValue = getenv("_SafeMode");
-	const char *msSafeModeValue = getenv("_MSSafeMode");
-	if (safeModeValue) {
-		if (!strcmp(safeModeValue, "1")) {
-			return false;
-		}
+
+/******************* roothide specific ***************/
+const char *safeModeValue = getenv("_SafeMode");
+if (safeModeValue) {
+	if (!strcmp(safeModeValue, "1")) {
+		return false;
 	}
-	if (msSafeModeValue) {
-		if (!strcmp(msSafeModeValue, "1")) {
-			return false;
-		}
+}
+const char *msSafeModeValue = getenv("_MSSafeMode");
+if (msSafeModeValue) {
+	if (!strcmp(msSafeModeValue, "1")) {
+		return false;
 	}
+}
+/******************* roothide specific *************/
+
 
 	const char *tweaksDisabledPathSuffixes[] = {
 		// System binaries
@@ -272,309 +248,87 @@ bool should_enable_tweaks(void)
 	return true;
 }
 
-
-#include "envbuf.h"
-
-#define POSIX_SPAWN_PROC_TYPE_DRIVER 0x700
-int posix_spawnattr_getprocesstype_np(const posix_spawnattr_t * __restrict, int * __restrict) __API_AVAILABLE(macos(10.8), ios(6.0));
-
-int posix_spawn_hook_roothide(pid_t *restrict pidp, const char *restrict path, struct _posix_spawn_args_desc *desc, 
-								char *const argv[restrict], char *const envp[restrict], void *orig, 
-								int (*trust_binary)(const char *path, xpc_object_t preferredArchsArray), 
-								int (*set_process_debugged)(uint64_t pid, bool fullyDebugged), 
-								double jetsamMultiplier)
-{
-	if(!path) { //Don't crash here due to bad posix_spawn call
-		return posix_spawn_hook_shared(pidp, path, desc, argv, envp, orig, trust_binary, set_process_debugged, jetsamMultiplier);
-	}
-
-	if(!desc || !desc->attrp) {
-		posix_spawnattr_t attr=NULL;
-		posix_spawnattr_init(&attr);
-		int ret = posix_spawn(pidp, path, (desc && desc->file_actions) ? &desc->file_actions : NULL, &attr, argv, envp);
-		posix_spawnattr_destroy(&attr);
-		return ret;
-	}
-	posix_spawnattr_t attrp = &desc->attrp;
-
-	short flags = 0;
-	posix_spawnattr_getflags(attrp, &flags);
-
-	int proctype = 0;
-	posix_spawnattr_getprocesstype_np(attrp, &proctype);
-
-	bool should_suspend = (proctype != POSIX_SPAWN_PROC_TYPE_DRIVER);
-	bool should_resume = should_suspend && (flags & POSIX_SPAWN_START_SUSPENDED)==0;
-	bool set_debugged = (flags & POSIX_SPAWN_START_SUSPENDED) != 0;
-	bool patch_exec = should_suspend && (flags & POSIX_SPAWN_SETEXEC) != 0;
-
-	if (should_suspend) {
-		posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
-	}
-
-	if (patch_exec) {
-		if (jbclient_patch_exec_add(path, should_resume) != 0) { // jdb fault?
-			//restore flags
-			posix_spawnattr_setflags(attrp, flags);
-			return 199;
-		}
-	}
-
-	// on some devices dyldhook may fail due to vm_protect(VM_PROT_READ|VM_PROT_WRITE), 2, (os/kern) protection failure in dsc::__DATA_CONST:__const, 
-	// so we need to disable dyld-in-cache here. (or we can use VM_PROT_READ|VM_PROT_WRITE|VM_PROT_COPY)
-	char **envc = envbuf_mutcopy((const char **)envp);
-	envbuf_setenv(&envc, "DYLD_IN_CACHE", "0");
-
-	int pid = 0;
-	int ret = posix_spawn_hook_shared(&pid, path, desc, argv, envc, orig, trust_binary, set_process_debugged, jetsamMultiplier);
-	if (pidp) *pidp = pid;
-
-	envbuf_free(envc);
-
-	// maybe caller will use it again? restore flags
-	posix_spawnattr_setflags(attrp, flags);
-
-	if (patch_exec) { //exec failed?
-		jbclient_patch_exec_del(path);
-	} else if (ret == 0 && pid > 0) {
-		if(set_debugged) {
-			set_process_debugged(pid, false);
-		}
-		if (should_suspend) {
-			if(jbclient_patch_spawn(pid, should_resume) != 0) { // jdb fault? kill
-				kill(pid, SIGKILL);
-				return 198;
-			}
-		}
-	}
-
-	return ret;
-}
-
 int __posix_spawn_hook(pid_t *restrict pid, const char *restrict path, struct _posix_spawn_args_desc *desc, char *const argv[restrict], char * const envp[restrict])
 {
-	return posix_spawn_hook_roothide(pid, path, desc, argv, envp, (void *)__posix_spawn_orig, jbclient_trust_binary, jbclient_platform_set_process_debugged, jbclient_jbsettings_get_double("jetsamMultiplier"));
+	return roothide_systemhook___posix_spawn_prehook(pid, path, desc, argv, envp, (void *)roothide_systemhook___posix_spawn_posthook, jbclient_trust_file_by_path, jbclient_platform_set_process_debugged, jbclient_jbsettings_get_double("jetsamMultiplier"));
 }
 
 int __posix_spawn_hook_with_filter(pid_t *restrict pid, const char *restrict path, char *const argv[restrict], char * const envp[restrict], struct _posix_spawn_args_desc *desc, int *ret)
 {
-	*ret = posix_spawn_hook_roothide(pid, path, desc, argv, envp, (void *)__posix_spawn_orig, jbclient_trust_binary, jbclient_platform_set_process_debugged, jbclient_jbsettings_get_double("jetsamMultiplier"));
+	*ret = roothide_systemhook___posix_spawn_prehook(pid, path, desc, argv, envp, (void *)roothide_systemhook___posix_spawn_posthook, jbclient_trust_file_by_path, jbclient_platform_set_process_debugged, jbclient_jbsettings_get_double("jetsamMultiplier"));
 	return 1;
 }
 
-#include <sys/mount.h>
 int __execve_hook(const char *path, char *const argv[], char *const envp[])
 {
-	posix_spawnattr_t attr = NULL;
-	posix_spawnattr_init(&attr);
-	posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETEXEC);
-	int ret = posix_spawn(NULL, path, NULL, &attr, argv, envp);
-	posix_spawnattr_destroy(&attr);
+	return roothide_systemhook___execve_prehook(path, argv, envp, (void *)roothide_systemhook___execve_posthook, jbclient_trust_file_by_path);
+}
 
-	if(ret==EPERM && access(path, X_OK)==0)
-	{
-		struct statfs fs1;
-		bool isPlatformBinary1 = statfs(gExecutablePath, &fs1)==0 && strcmp(fs1.f_mntonname, "/private/var") != 0;
-
-		struct statfs fs2;
-		bool isPlatformBinary2 = statfs(path, &fs2)==0 && strcmp(fs2.f_mntonname, "/private/var") != 0;
-		
-		if(isPlatformBinary1 && isPlatformBinary2) {
-			return execve_hook_shared(path, argv, envp, (void *)__execve_orig, jbclient_trust_binary);
+const struct mach_header_64 *get_dyld_mach_header(void)
+{
+	static const struct mach_header_64 *dyldMachHeader = NULL;
+	static dispatch_once_t onceToken;
+	dispatch_once (&onceToken, ^{
+		task_dyld_info_data_t dyldInfo;
+		uint32_t count = TASK_DYLD_INFO_COUNT;
+		kern_return_t kr = task_info(mach_task_self_, TASK_DYLD_INFO, (task_info_t)&dyldInfo, &count);
+		if (kr == KERN_SUCCESS) {
+			struct dyld_all_image_infos *infos = (struct dyld_all_image_infos *)dyldInfo.all_image_info_addr;
+			dyldMachHeader = (const struct mach_header_64 *)infos->dyldImageLoadAddress;
 		}
-	}
-
-	if(ret != 0) {
-		// posix_spawn will return errno and restore errno if it fails
-		// so we need to set errno by ourself
-		errno = ret; 
-		ret = -1;
-	}
-
-	return ret;
-}
-
-
-#include <pwd.h>
-#include <libgen.h>
-#include <stdio.h>
-#include <libproc.h>
-#include <libproc_private.h>
-#include <sys/sysctl.h>
-
-//some process may be killed by sandbox if call systme getppid()
-pid_t __getppid()
-{
-    struct proc_bsdinfo procInfo;
-	if (proc_pidinfo(getpid(), PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo)) <= 0) {
-		return -1;
-	}
-    return procInfo.pbi_ppid;
-}
-
-static uid_t _CFGetSVUID(bool *successful) {
-    uid_t uid = -1;
-    struct kinfo_proc kinfo;
-    u_int miblen = 4;
-    size_t  len;
-    int mib[miblen];
-    int ret;
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_PROC;
-    mib[2] = KERN_PROC_PID;
-    mib[3] = getpid();
-    len = sizeof(struct kinfo_proc);
-    ret = sysctl(mib, miblen, &kinfo, &len, NULL, 0);
-    if (ret != 0) {
-        uid = -1;
-        *successful = false;
-    } else {
-        uid = kinfo.kp_eproc.e_pcred.p_svuid;
-        *successful = true;
-    }
-    return uid;
-}
-
-bool _CFCanChangeEUIDs(void) {
-    static bool canChangeEUIDs;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        uid_t euid = geteuid();
-        uid_t uid = getuid();
-        bool gotSVUID = false;
-        uid_t svuid = _CFGetSVUID(&gotSVUID);
-        canChangeEUIDs = (uid == 0 || uid != euid || svuid != euid || !gotSVUID);
-    });
-    return canChangeEUIDs;
-}
-
-void loadPathHook()
-{
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-		void* roothidehooks = dlopen(JBROOT_PATH("/basebin/roothidehooks.dylib"), RTLD_NOW);
-		void (*pathhook)() = dlsym(roothidehooks, "pathhook");
-		pathhook();
 	});
+	return dyldMachHeader;
 }
 
-void redirect_path_env(const char* rootdir)
+int parse_dyldhook_jbinfo(char **jbRootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut, bool *fullyDebuggedOut)
 {
-    //for now libSystem should be initlized, container should be set.
+	// Get dyld header
+	const struct mach_header_64 *dyldHeader = get_dyld_mach_header();
+	if (!dyldHeader) return -1;
 
-    char* homedir = NULL;
+	// Check if dyld LC_UUID contains dopamine magic
+	uuid_t dyldUUID;
+	if (!_dyld_get_image_uuid((const struct mach_header *)dyldHeader, dyldUUID)) return -2;
+	if (!string_has_prefix((char *)dyldUUID, "DOPA")) return -3;
 
-/* 
-there is a bug in NSHomeDirectory,
-if a containerized root process changes its uid/gid, 
-NSHomeDirectory will return a home directory that it cannot access. (exclude NSTemporaryDirectory)
-We just keep this bug:
-*/
-    if(!issetugid()) // issetugid() should always be false at this time. (but how about persona-mgmt? idk)
-    {
-        homedir = getenv("CFFIXED_USER_HOME");
-        if(homedir)
-        {
-#define CONTAINER_PATH_PREFIX   "/private/var/mobile/Containers/Data/" // +/Application,PluginKitPlugin,InternalDaemon
-            if(strncmp(homedir, CONTAINER_PATH_PREFIX, sizeof(CONTAINER_PATH_PREFIX)-1) == 0)
-            {
-                return; //containerized
-            }
-            else
-            {
-                homedir = NULL; //from parent, drop it
-            }
-        }
-    }
+	// If so, get __jbinfo section
+	size_t jbInfoSize = 0;
+	struct dyld_jbinfo *jbInfo = (struct dyld_jbinfo *)getsectiondata(dyldHeader, "__DATA", "__jbinfo", &jbInfoSize);
+	if (!jbInfo) return -4;
 
-    if(!homedir) {
-        struct passwd* pwd = getpwuid(geteuid());
-        if(pwd && pwd->pw_dir) {
-            homedir = pwd->pw_dir;
-        }
-    }
+	// Check if dyld already performed check-in
+	if (jbInfo->state != DYLD_STATE_CHECKED_IN) return -5;
 
-    // if(!homedir) {
-    //     //CFCopyHomeDirectoryURL does, but not for NSHomeDirectory
-    //     homedir = getenv("HOME");
-    // }
+	// If so, parse jbinfo
+	if (jbRootPathOut)        *jbRootPathOut        = jbInfo->jbRootPath;
+	if (bootUUIDOut)          *bootUUIDOut          = jbInfo->bootUUID;
+	if (sandboxExtensionsOut) *sandboxExtensionsOut = jbInfo->sandboxExtensions;
+	if (fullyDebuggedOut)     *fullyDebuggedOut     = jbInfo->fullyDebugged;
 
-    if(!homedir) {
-        homedir = "/var/empty";
-    }
-
-    char newhome[PATH_MAX]={0};
-    snprintf(newhome,sizeof(newhome),"%s/%s",rootdir,homedir);
-    setenv("CFFIXED_USER_HOME", newhome, 1);
-}
-
-void redirect_paths(const char* rootdir)
-{
-    do {
-        
-        char executablePath[PATH_MAX]={0};
-        uint32_t bufsize=sizeof(executablePath);
-        if(_NSGetExecutablePath(executablePath, &bufsize) != 0)
-            break;
-        
-        char realexepath[PATH_MAX];
-        if(!realpath(executablePath, realexepath))
-            break;
-            
-        char realjbroot[PATH_MAX];
-        if(!realpath(rootdir, realjbroot))
-            break;
-        
-        if(realjbroot[strlen(realjbroot)] != '/')
-            strcat(realjbroot, "/");
-        
-        if(strncmp(realexepath, realjbroot, strlen(realjbroot)) != 0)
-            break;
-
-        //for jailbroken binaries
-        redirect_path_env(rootdir);
-		
-		if(_CFCanChangeEUIDs()) {
-			loadPathHook();
-		}
-    
-        pid_t ppid = __getppid();
-        assert(ppid > 0);
-        if(ppid != 1)
-            break;
-        
-        char pwd[PATH_MAX];
-        if(getcwd(pwd, sizeof(pwd)) == NULL)
-            break;
-        if(strcmp(pwd, "/") != 0)
-            break;
-    
-        assert(chdir(rootdir)==0);
-        
-    } while(0);
-}
-
-//export for PatchLoader
-__attribute__((visibility("default"))) int PLRequiredJIT() {
 	return 0;
 }
 
-char HOOK_DYLIB_PATH[PATH_MAX] = {0};
-
 __attribute__((constructor)) static void initializer(void)
-{
-//////////////////////////////////////////////
-	struct dl_info di={0};
-	dladdr((void*)initializer, &di);
-	strlcpy(HOOK_DYLIB_PATH, di.dli_fname, sizeof(HOOK_DYLIB_PATH));
-/////////////////////////////////////////////////////////////////////////
+{	
+/***** roothide specific ****/
+	roothide_init();
+/***** roothide specific ****/
 
-	// Tell jbserver (in launchd) that this process exists
-	// This will disable page validation, which allows the rest of this constructor to apply hooks
-	if (jbclient_process_checkin(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions, &gFullyDebugged) != 0) return;
 
-	// Apply sandbox extensions
-	apply_sandbox_extensions();
+	// Under normal circumstances, dyldhook will have already handled the check-in, so get the check-in information from the __jbinfo section
+	// For more information on the check-in process, check the comments in dyldhook
+	if (parse_dyldhook_jbinfo(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions, &gFullyDebugged) != 0) {
+		// If under any circumstances dyldhook has *not* performed a check-in, do it now
+		// This code path is taken inside xpcproxy on iOS 16, because launchd apparently no longer passes it a bootstrap port
+		if (jbclient_process_checkin(&JB_RootPath, &JB_BootUUID, &JB_SandboxExtensions, &gFullyDebugged) == 0) {
+			consume_tokenized_sandbox_extensions(JB_SandboxExtensions);
+		}
+		else {
+			// If neither dyldhook nor systemhook managed to perform the check-in, something is very wrong and the best thing we can do is bail out
+			// Should realistically never happen though
+			return;
+		}
+	}
 
 	// Unset DYLD_INSERT_LIBRARIES, but only if systemhook itself is the only thing contained in it
 	// Feeable attempt at making jailbreak detection harder
@@ -588,19 +342,24 @@ __attribute__((constructor)) static void initializer(void)
 	// Apply posix_spawn / execve hooks
 	if (__builtin_available(iOS 16.0, *)) {
 		litehook_hook_function(__posix_spawn, __posix_spawn_hook);
-		litehook_hook_function(__execve, __execve_hook);
+		litehook_hook_function(__execve,      __execve_hook);
 	}
 	else {
 		// On iOS 15 there is a way to hook posix_spawn and execve without doing instruction replacements
-		// This is fairly convinient due to instruction replacements being presumed to be the primary trigger for spinlock panics on iOS 15 arm64e
-		// Unfortunately Apple decided to remove these in iOS 16 :( Doesn't matter too much though because spinlock panics are fixed there
+		// Unfortunately Apple decided to remove these in iOS 16 :(
 
 		void **posix_spawn_with_filter = litehook_find_dsc_symbol("/usr/lib/system/libsystem_kernel.dylib", "_posix_spawn_with_filter");
-		*posix_spawn_with_filter = __posix_spawn_hook_with_filter;
+		void **execve_with_filter      = litehook_find_dsc_symbol("/usr/lib/system/libsystem_kernel.dylib", "_execve_with_filter");
 
-		void **execve_with_filter = litehook_find_dsc_symbol("/usr/lib/system/libsystem_kernel.dylib", "_execve_with_filter");
-		*execve_with_filter = __execve_hook;
+		*posix_spawn_with_filter = __posix_spawn_hook_with_filter;
+		*execve_with_filter      = __execve_hook;
 	}
+
+	// Hook the dyld_shared_cache __fcntl to jump to the dyld __fcntl instead
+	// This makes it so that library validation is also bypassed if someone calls fcntl in userspace to attach a signature manually
+	void *dyld___fcntl = litehook_find_symbol(get_dyld_mach_header(), "___fcntl");
+	extern int __fcntl(int fd, int op, ... /* arg */ );
+	litehook_hook_function(__fcntl, dyld___fcntl);
 
 	// Initialize stuff neccessary for sandbox_apply hook
 	gLibSandboxHandle = dlopen("/usr/lib/libsandbox.1.dylib", RTLD_FIRST | RTLD_LOCAL | RTLD_LAZY);
@@ -609,26 +368,16 @@ __attribute__((constructor)) static void initializer(void)
 	// Apply dyld hooks
 	void ***gDyldPtr = litehook_find_dsc_symbol("/usr/lib/system/libdyld.dylib", "__ZN5dyld45gDyldE");
 	if (gDyldPtr) {
-		dyld_hook_routine(*gDyldPtr, 14, (void *)&dyld_dlopen_hook, (void **)&dyld_dlopen_orig, 0xBF31);
+		// TODO: Maybe we can just rebind sandbox_apply instead?
 		dyld_hook_routine(*gDyldPtr, 17, (void *)&dyld_dlsym_hook, (void **)&dyld_dlsym_orig, 0x839D);
-		dyld_hook_routine(*gDyldPtr, 18, (void *)&dyld_dlopen_preflight_hook, (void **)&dyld_dlopen_preflight_orig, 0xB1B6);
-		dyld_hook_routine(*gDyldPtr, 97, (void *)&dyld_dlopen_from_hook, (void **)&dyld_dlopen_from_orig, 0xD48C);
-		dyld_hook_routine(*gDyldPtr, 98, (void *)&dyld_dlopen_audited_hook, (void **)&dyld_dlopen_audited_orig, 0xD2A5);
 	}
 
-//////////////////////////////////////////////////////////////////////
-  /* after unsandboxing jbroot and applying dyldhooks */
 
-	const char* DYLD_IN_CACHE = getenv("DYLD_IN_CACHE");
-	if(strcmp(DYLD_IN_CACHE, "0") == 0) {
-		unsetenv("DYLD_IN_CACHE");
-	}
+/*************************** roothide *************************/
+/* after unsandboxing jbroot and applying library-trust-hook */
+roothide_init_with_checkin(JB_RootPath); // will hook dlopen* if necessary
+/*************************** roothide ************************/
 
-	redirect_paths(JB_RootPath);
-
-	dlopen(JBROOT_PATH("/usr/lib/roothideinit.dylib"), RTLD_NOW);
-	
-//////////////////////////////////////////////////////////////////////////
 
 #ifdef __arm64e__
 	// Since pages have been modified in this process, we need to load forkfix to ensure forking will work
@@ -639,7 +388,7 @@ __attribute__((constructor)) static void initializer(void)
 #endif
 
 	if (load_executable_path() == 0) {
-		// Load rootlesshooks and watchdoghook if neccessary
+		// Load rootlesshooks / watchdoghook when neccessary
 		if (!strcmp(gExecutablePath, "/usr/sbin/cfprefsd") ||
 			!strcmp(gExecutablePath, "/System/Library/CoreServices/SpringBoard.app/SpringBoard") ||
 			!strcmp(gExecutablePath, "/usr/libexec/lsd")) {
@@ -660,7 +409,7 @@ __attribute__((constructor)) static void initializer(void)
 
 #ifndef __arm64e__
 		// On arm64, writing to executable pages removes CS_VALID from the csflags of the process
-		// These hooks are neccessary to get the system to behave with this
+		// These hooks are neccessary to get the system to behave with this (since multiple system APIs check for CS_VALID and produce failures if it's not set)
 		// They are ugly but needed
 		litehook_hook_function(csops, csops_hook);
 		litehook_hook_function(csops_audittoken, csops_audittoken_hook);
@@ -672,25 +421,18 @@ __attribute__((constructor)) static void initializer(void)
 			litehook_hook_function(necp_session_action, necp_session_action_hook);
 		}
 #endif
-		if (__builtin_available(iOS 16.0, *)) {
-			bool is_app_path(const char* path);
-			if(!is_app_path(gExecutablePath)) {
-				litehook_hook_function(__sysctl, __sysctl_hook);
-				litehook_hook_function(__sysctlbyname, __sysctlbyname_hook);
-			}
-		}
 
-		if(string_has_suffix(gExecutablePath, "/Dopamine.app/Dopamine")) {
-			loadPathHook();
-		}
 
-		dlopen(JBROOT_PATH("/usr/lib/roothidepatch.dylib"), RTLD_NOW); //require jit
+/******************* roothide *****************/
+roothide_init_with_executable(gExecutablePath);
+/******************* roothide ****************/
+
 
 		// Load tweaks if desired
 		// We can hardcode /var/jb here since if it doesn't exist, loading TweakLoader.dylib is not going to work anyways
 		if (should_enable_tweaks()) {
 			const char *tweakLoaderPath = JBROOT_PATH("/usr/lib/TweakLoader.dylib");
-			if(access(tweakLoaderPath, F_OK) == 0) {
+			if (access(tweakLoaderPath, F_OK) == 0) {
 				void *tweakLoaderHandle = dlopen(tweakLoaderPath, RTLD_NOW);
 				if (tweakLoaderHandle != NULL) {
 					dlclose(tweakLoaderHandle);

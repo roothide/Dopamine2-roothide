@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <mach-o/dyld.h>
+#include "common.h"
 
 #ifndef DEBUG
 #define NSLog(args...)	

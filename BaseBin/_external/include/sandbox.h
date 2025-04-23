@@ -118,6 +118,15 @@ int sandbox_extension_release(int64_t extension_handle);
 int sandbox_extension_release_file(int64_t extension_handle, const char *path);
 int sandbox_extension_update_file(int64_t extension_handle, const char *path);
 
-int __sandbox_ms(const char *policyname, int call, void *arg);
+struct sandbox_policy_layout {
+    void *profile;
+    uint64_t len;
+    void *container;
+    uint64_t containerLen;
+    uint64_t pad1;
+    uint64_t pad2;
+};
+
+int __sandbox_ms(const char *policyname, int callnum, struct sandbox_policy_layout *policy);
 
 #endif

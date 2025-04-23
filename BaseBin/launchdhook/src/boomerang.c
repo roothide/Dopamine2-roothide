@@ -97,6 +97,6 @@ int boomerang_recoverPrimitives(bool firstRetrieval, bool shouldEndBoomerang)
 			waitpid(boomerangPid, &boomerangStatus, 0);
 		}
 	}
-	
+
 	return 0;
 }

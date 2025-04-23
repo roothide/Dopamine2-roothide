@@ -8,15 +8,21 @@
 #include <mach-o/dyld.h>
 #include <sys/param.h>
 #include <sys/mount.h>
+#include "jbserver/jbserver_local.h"
 extern char **environ;
 
-extern int systemwide_trust_binary(const char *binaryPath, xpc_object_t preferredArchsArray);
+//void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
+#define abort_with_reason(reason_namespace,reason_code,reason_string,reason_flags)  launchd_panic("%s",reason_string)
+extern int roothide_launchd___posix_spawn_prehook(pid_t *restrict pidp, const char *restrict path, struct _posix_spawn_args_desc *desc, char *const argv[restrict], char *const envp[restrict]);
+extern int roothide_launchd___posix_spawn_posthook(pid_t *restrict pidp, const char *restrict path, struct _posix_spawn_args_desc *desc, char *const argv[restrict], char *const envp[restrict]);
+
+extern int systemwide_trust_file_by_path(const char *path);
 extern int platform_set_process_debugged(uint64_t pid, bool fullyDebugged);
+extern void systemwide_domain_set_enabled(bool enabled);
 
 #define LOG_PROCESS_LAUNCHES 0
 
 extern bool gInEarlyBoot;
-extern bool gFirstLoad;
 
 void early_boot_done(void)
 {
@@ -24,17 +30,52 @@ void early_boot_done(void)
 }
 
 /*
+void ensure_fakelib_mounted(void)
+{
+	struct statfs fsb;
+    if (statfs("/usr/lib", &fsb) != 0) return;
+    if (strcmp(fsb.f_mntonname, "/usr/lib") != 0) {
+		systemwide_domain_set_enabled(true);
+
+		// The jailbreak server is not reachable at this point in the launchd lifecycle
+		// So we need to host our own, just so that jbctl can talk to it
+		mach_port_t serverPort = jbserver_local_start();
+		jbctl_earlyboot(serverPort, "internal", "fakelib", "mount", NULL);
+		jbserver_local_stop();
+
+		// Note down that the jailbreak was hidden
+		// So that after the userspace reboot, we can unmount fakelib again
+		setenv("DOPAMINE_IS_HIDDEN", "1", true);
+	}
+}
+*/
+
 int __posix_spawn_orig_wrapper(pid_t *restrict pid, const char *restrict path,
 					   struct _posix_spawn_args_desc *desc,
 					   char *const argv[restrict],
 					   char *const envp[restrict])
 {
+short flags = -1;
+if (desc && desc->attrp) {
+	posix_spawnattr_t attr = desc->attrp;
+	posix_spawnattr_getflags(&attr, &flags);
+}
+JBLogDebug("launchd spawn path=%s flags=%x", path, flags);
+if (argv) for (int i = 0; argv[i]; i++) JBLogDebug("\targs[%d] = %s", i, argv[i]);
+if (envp) for (int i = 0; envp[i]; i++) JBLogDebug("\tenvp[%d] = %s", i, envp[i]);
+
+pid_t pidval = 0;
+if (!pid) pid = &pidval;
+
+
 	// we need to disable the crash reporter during the orig call
 	// otherwise the child process inherits the exception ports
 	// and this would trip jailbreak detections
 	crashreporter_pause();	
 	int r = __posix_spawn_orig(pid, path, desc, argv, envp);
 	crashreporter_resume();
+
+JBLogDebug("__posix_spawn ret=%d pid=%d", r, *pid);
 
 	return r;
 }
@@ -57,6 +98,10 @@ int __posix_spawn_hook(pid_t *restrict pid, const char *restrict path,
 			// Mainly so we don't lock up while spawning boomerang
 			gInEarlyBoot = true;
 
+			// If the jailbreak is currently hidden, fakelib is not mounted
+			// It needs to be mounted to regain launchd code execution after the userspace reboot
+//			ensure_fakelib_mounted();
+
 #if LOG_PROCESS_LAUNCHES
 			FILE *f = fopen("/var/mobile/launch_log.txt", "a");
 			fprintf(f, "==== USERSPACE REBOOT ====\n");
@@ -73,6 +118,11 @@ int __posix_spawn_hook(pid_t *restrict pid, const char *restrict path,
 			const char *stagedJailbreakUpdate = getenv("STAGED_JAILBREAK_UPDATE");
 			if (stagedJailbreakUpdate) {
 				int r = jbupdate_basebin(stagedJailbreakUpdate);
+				if (r != 0) {
+					char msg[1000];
+					snprintf(msg, 1000, "Failed updating basebin (error %d).", r);
+					abort_with_reason(7, 1, msg, 0);
+				}
 				unsetenv("STAGED_JAILBREAK_UPDATE");
 			}
 
@@ -134,198 +184,10 @@ int __posix_spawn_hook(pid_t *restrict pid, const char *restrict path,
 		}
 	}
 
-	return posix_spawn_hook_shared(pid, path, desc, argv, envp, __posix_spawn_orig_wrapper, systemwide_trust_binary, platform_set_process_debugged, jbsetting(jetsamMultiplier));
-}
-*/
-
-
-#include <libjailbreak/kernel.h>
-#include <libjailbreak/deny.h>
-#include <libjailbreak/log.h>
-#import "../systemhook/src/envbuf.h"
-
-#define POSIX_SPAWN_PROC_TYPE_DRIVER 0x700
-
-int posix_spawnattr_getprocesstype_np(const posix_spawnattr_t *__restrict, int *__restrict) __API_AVAILABLE(macos(10.8), ios(6.0));
-
-int __posix_spawn_orig_wrapper(pid_t *restrict pidp, const char *restrict path, struct _posix_spawn_args_desc *desc, char *const argv[restrict], char *const envp[restrict])
-{
-    short flags = 0;
-    if (desc && desc->attrp) {
-        posix_spawnattr_t attr = desc->attrp;
-        posix_spawnattr_getflags(&attr, &flags);
-    }
-    JBLogDebug("launchd spawn path=%s flags=%x", path, flags);
-    if (argv) for (int i = 0; argv[i]; i++) JBLogDebug("\targs[%d] = %s", i, argv[i]);
-    if (envp) for (int i = 0; envp[i]; i++) JBLogDebug("\tenvp[%d] = %s", i, envp[i]);
-
-    int pid = 0;
-    if (!pidp) pidp = &pid;
-
-    // we need to disable the crash reporter during the orig call
-    // otherwise the child process inherits the exception ports
-    // and this would trip jailbreak detections
-    crashreporter_pause();
-    int r = __posix_spawn_orig(pidp, path, desc, argv, envp);
-    crashreporter_resume();
-
-    pid = *pidp;
-
-    JBLogDebug("spawn ret=%d pid=%d", r, pid);
-
-    return r;
-}
-
-int __posix_spawn_hook(pid_t *restrict pidp, const char *restrict path, struct _posix_spawn_args_desc *desc, char *const argv[restrict], char *const envp[restrict])
-{
-	if(!desc || !desc->attrp) {
-		posix_spawnattr_t attr=NULL;
-		posix_spawnattr_init(&attr);
-		int ret = posix_spawn(pidp, path, (desc && desc->file_actions) ? &desc->file_actions : NULL, &attr, argv, envp);
-		posix_spawnattr_destroy(&attr);
-		return ret;
-	}
-	posix_spawnattr_t attrp = &desc->attrp;
-
-	if (path) {
-		char executablePath[1024];
-		uint32_t bufsize = sizeof(executablePath);
-		_NSGetExecutablePath(&executablePath[0], &bufsize);
-		if (!strcmp(path, executablePath)) {
-			// This spawn will perform a userspace reboot...
-			// Instead of the ordinary hook, we want to reinsert this dylib
-			// This has already been done in envp so we only need to call the original posix_spawn
-
-			// We are back in "early boot" for the remainder of this launchd instance
-			// Mainly so we don't lock up while spawning boomerang
-			gInEarlyBoot = true;
-
-#if LOG_PROCESS_LAUNCHES
-			FILE *f = fopen("/var/mobile/launch_log.txt", "a");
-			fprintf(f, "==== USERSPACE REBOOT ====\n");
-			fclose(f);
-#endif
-
-			// Before the userspace reboot, we want to stash the primitives into boomerang
-			boomerang_stashPrimitives();
-
-			// Fix Xcode debugging being broken after the userspace reboot
-			unmount("/Developer", MNT_FORCE);
-
-			// If there is a pending jailbreak update, apply it now
-			const char *stagedJailbreakUpdate = getenv("STAGED_JAILBREAK_UPDATE");
-			if (stagedJailbreakUpdate) {
-				int r = jbupdate_basebin(stagedJailbreakUpdate);
-				unsetenv("STAGED_JAILBREAK_UPDATE");
-			}
-
-            // Suspend launchd and patch GET_TASK_ALLOW in boomerang
-            short flags = 0;
-            posix_spawnattr_getflags(attrp, &flags);
-            posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
-
-			// Always use environ instead of envp, as boomerang_stashPrimitives calls setenv
-			// setenv / unsetenv can sometimes cause environ to get reallocated
-			// In that case envp may point to garbage or be empty
-			// Say goodbye to this process
-			return __posix_spawn_orig_wrapper(pidp, path, desc, argv, environ);
-		}
-	}
-
-	// We can't support injection into processes that get spawned before the launchd XPC server is up
-	// (Technically we could but there is little reason to, since it requires additional work)
-	if (gInEarlyBoot) {
-		if (!strcmp(path, "/usr/libexec/xpcproxy")) {
-			// The spawned process being xpcproxy indicates that the launchd XPC server is up
-			// All processes spawned including this one should be injected into
-			early_boot_done();
-		}
-		else {
-			return __posix_spawn_orig_wrapper(pidp, path, desc, argv, envp);
-		}
-	}
-
-	if(gFirstLoad) {
-		//we should not enable system-wide injection until the jailbreak is finalized (userspace reboot).
-		return __posix_spawn_orig_wrapper(pidp, path, desc, argv, envp);
-	}
-
-    if (isBlacklisted(path)) {
-        JBLogDebug("blacklisted app %s", path);
-
-		char **envc = envbuf_mutcopy((const char **)envp);
-
-		//choicy may set these 
-		envbuf_unsetenv(&envc, "_SafeMode");
-		envbuf_unsetenv(&envc, "_MSSafeMode");
-
-		int pid = 0;
-		if (!pidp) pidp = &pid;
-        int ret = __posix_spawn_orig_wrapper(pidp, path, desc, argv, envc);
-		pid = *pidp;
-
-		envbuf_free(envc);
-
-		if(ret==0 && pid>0) {
-			short flags = 0;
-			posix_spawnattr_getflags(attrp, &flags);
-			if((flags & POSIX_SPAWN_START_SUSPENDED) != 0) {
-				platform_set_process_debugged(pid, false);
-			}
-		}
-
-        return ret;
-    }
-
-    short flags = 0;
-    posix_spawnattr_getflags(attrp, &flags);
-
-    int proctype = 0;
-    posix_spawnattr_getprocesstype_np(attrp, &proctype);
-
-    bool should_suspend = (proctype != POSIX_SPAWN_PROC_TYPE_DRIVER);
-    bool should_resume = should_suspend && (flags & POSIX_SPAWN_START_SUSPENDED)==0;
-	bool set_debugged = (flags & POSIX_SPAWN_START_SUSPENDED) != 0;
-
-    if (should_suspend) {
-        posix_spawnattr_setflags(attrp, flags | POSIX_SPAWN_START_SUSPENDED);
-    }
-
-	// on some devices dyldhook may fail due to vm_protect(VM_PROT_READ|VM_PROT_WRITE), 2, (os/kern) protection failure in dsc::__DATA_CONST:__const, 
-	// so we need to disable dyld-in-cache here. (or we can use VM_PROT_READ|VM_PROT_WRITE|VM_PROT_COPY)
-	char **envc = envbuf_mutcopy((const char **)envp);
-	envbuf_setenv(&envc, "DYLD_IN_CACHE", "0");
-
-    int pid = 0;
-    if (!pidp) pidp = &pid;
-    int ret = posix_spawn_hook_shared(pidp, path, desc, argv, envc, __posix_spawn_orig_wrapper, systemwide_trust_binary, platform_set_process_debugged, jbsetting(jetsamMultiplier));
-    pid = *pidp;
-
-	envbuf_free(envc);
-	
-	posix_spawnattr_setflags(attrp, flags); // maybe caller will use it again?
-
-    if (ret != 0){
-        JBLogDebug("spawn error ret=%d errno=%d err=%s", ret, errno, strerror(errno));
-    }
-
-    if (ret == 0 && pid > 0) {
-		if(set_debugged) {
-			platform_set_process_debugged(pid, false);
-		}
-		if(should_suspend) {
-			// give get-task-allow entitlement to make dyld respect DYLD_INSERT_LIBRARIES
-			proc_csflags_patch(pid);
-		}
-        if (should_resume) {
-            kill(pid, SIGCONT);
-        }
-    }
-
-    return ret;
+	return posix_spawn_hook_shared(pid, path, desc, argv, envp, roothide_launchd___posix_spawn_posthook, systemwide_trust_file_by_path, platform_set_process_debugged, jbsetting(jetsamMultiplier));
 }
 
 void initSpawnHooks(void)
 {
-	MSHookFunction(&__posix_spawn, (void *)__posix_spawn_hook, NULL);
+	MSHookFunction(&__posix_spawn, (void *)roothide_launchd___posix_spawn_prehook, NULL);
 }

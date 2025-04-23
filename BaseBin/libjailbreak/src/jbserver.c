@@ -1,9 +1,7 @@
 #include "jbserver.h"
-#include "codesign.h"
 #include "util.h"
 
-#include "deny.h"
-#include <libproc.h>
+#include "roothider.h"
 
 int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xmsg)
 {
@@ -23,21 +21,13 @@ int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xms
 	audit_token_t clientToken = { 0 };
 	xpc_dictionary_get_audit_token(xmsg, &clientToken);
 
-	pid_t pid = audit_token_to_pid(clientToken);
-	uid_t uid = audit_token_to_euid(clientToken);
 
-	uint32_t csFlags = 0;
-	csops(pid, CS_OPS_STATUS, &csFlags, sizeof(csFlags));
+/************************************/
+const char* desc = NULL;
+JBLogDebug("jbserver received xpc message from (%d) %s :\n%s", audit_token_to_pid(clientToken), proc_get_path(audit_token_to_pid(clientToken),NULL), (desc=xpc_copy_description(xmsg)));
+if(desc) free((void*)desc);
+/************************************/
 
-	if(uid==501 && (csFlags & CS_PLATFORM_BINARY)==0) {
-		char callerPath[4 * MAXPATHLEN]; /* proc_pidpath is not always reliable, 
-		it will return ENOENT if the original executable file of a running process is removed from disk (e.g.  upgrading/reinstalling a package) */
-		if (proc_pidpath(pid, callerPath, sizeof(callerPath)) > 0) {
-			if (isBlacklisted(callerPath)) {
-				return -1;
-			}
-		}
-	}
 
 	if (domain->permissionHandler) {
 		if (!domain->permissionHandler(clientToken)) return -2;
@@ -64,6 +54,9 @@ int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xms
 				break;
 				case JBS_TYPE_UINT64:
 				args[i] = (void *)xpc_dictionary_get_uint64(xmsg, argDesc->name);
+				break;
+				case JBS_TYPE_FD:
+				args[i] = (void *)(int64_t)xpc_dictionary_dup_fd(xmsg, argDesc->name);
 				break;
 				case JBS_TYPE_STRING:
 				args[i] = (void *)xpc_dictionary_get_string(xmsg, argDesc->name);
@@ -106,6 +99,11 @@ int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xms
 				case JBS_TYPE_UINT64:
 				xpc_dictionary_set_uint64(xreply, argDesc->name, (uint64_t)argsOut[i]);
 				break;
+				case JBS_TYPE_FD: {
+					xpc_dictionary_set_fd(xreply, argDesc->name, (int)(int64_t)argsOut[i]);
+					close((int)(int64_t)argsOut[i]);
+					break;
+				}
 				case JBS_TYPE_STRING: {
 					if (argsOut[i]) {
 						xpc_dictionary_set_string(xreply, argDesc->name, (char *)argsOut[i]);
@@ -133,6 +131,11 @@ int jbserver_received_xpc_message(struct jbserver_impl *server, xpc_object_t xms
 				}
 				default:
 				break;
+			}
+		}
+		else {
+			if (argDesc->type == JBS_TYPE_FD) {
+				close((int)(int64_t)args[i]);
 			}
 		}
 	}

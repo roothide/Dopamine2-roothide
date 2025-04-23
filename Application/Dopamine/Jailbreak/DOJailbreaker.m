@@ -27,7 +27,9 @@
 #import <libjailbreak/jbserver_boomerang.h>
 #import <libjailbreak/signatures.h>
 #import <libjailbreak/jbclient_xpc.h>
+#import <libjailbreak/jbclient_mach.h>
 #import <libjailbreak/kcall_arm64.h>
+#import <libjailbreak/basebin_gen.h>
 #import <CoreServices/LSApplicationProxy.h>
 #import <sys/utsname.h>
 #import "spawn.h"
@@ -86,13 +88,6 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
         };
 
         uint32_t idx = 7;
-
-        sets[idx++] = "namecache";
-		
-        if (xpf_set_is_supported("amfi_oids")) {
-            sets[idx++] = "amfi_oids";
-        }
-        
         if (xpf_set_is_supported("devmode")) {
             sets[idx++] = "devmode"; 
         }
@@ -102,6 +97,18 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
         if (xpf_set_is_supported("arm64kcall")) {
             sets[idx++] = "arm64kcall"; 
         }
+
+
+/********************** roothide *************************/
+sets[idx++] = "namecache";
+
+if (xpf_set_is_supported("amfi_oids")) {
+    sets[idx++] = "amfi_oids";
+}
+
+sets[idx] = NULL;
+/********************** roothide *************************/
+
 
         _systemInfoXdict = xpf_construct_offset_dictionary((const char **)sets);
         if (_systemInfoXdict) {
@@ -294,11 +301,6 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     if (@available(iOS 16.0, *)) {
         uint64_t developer_mode_storage = kread64(ksymbol(developer_mode_enabled));
         kwrite8(developer_mode_storage, 1);
-
-        uint64_t launch_env_logging = kread64(ksymbol(launch_env_logging));
-        uint64_t developer_mode_status = kread64(ksymbol(developer_mode_status));
-        kwrite64(ksymbol(launch_env_logging), developer_mode_status);
-        kwrite64(ksymbol(developer_mode_status), launch_env_logging);
     }
     return nil;
 }
@@ -316,60 +318,52 @@ typedef NS_ENUM(NSInteger, JBErrorCode) {
     return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : @"Failed to load BaseBin trustcache"}];
 }
 */
-
-int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
+/************************ roothide specific ******************/
 - (NSError *)loadBasebinTrustcache
 {
-    cdhash_t* basebins_cdhashes=NULL;
-    uint32_t basebins_cdhashesCount=0;
+    int ret = randomizeAndLoadBasebinTrustcache(JBROOT_PATH("/basebin/"));
+    if (ret != 0) {
+        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache 
+            userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to load BaseBin trustcache: %d", ret]}];
+    }
+    return nil;
+}
+/************************ roothide specific ******************/
 
-    NSDirectoryEnumerator<NSURL *> *directoryEnumerator = [[NSFileManager defaultManager] enumeratorAtURL:[NSURL fileURLWithPath:jbroot(@"/basebin/")] includingPropertiesForKeys:nil options:0 errorHandler:nil];
-                                            
-    for(NSURL* fileURL in directoryEnumerator)
-    {
-        cdhash_t cdhash={0};
-        if(ensure_randomized_cdhash(fileURL.path.fileSystemRepresentation, cdhash) == 0) {
-            basebins_cdhashes = realloc(basebins_cdhashes, (basebins_cdhashesCount+1) * sizeof(cdhash_t));
-            memcpy(&basebins_cdhashes[basebins_cdhashesCount], cdhash, sizeof(cdhash_t));
-            basebins_cdhashesCount++;
+
+struct boomerang_info {
+    mach_port_t serverPort;
+    dispatch_semaphore_t boomerangDone;
+};
+
+void *boomerang_server(struct boomerang_info *info)
+{
+    while (true) {
+        xpc_object_t xdict = nil;
+        if (!xpc_pipe_receive(info->serverPort, &xdict)) {
+            if (jbserver_received_boomerang_xpc_message(&gBoomerangServer, xdict) == JBS_BOOMERANG_DONE) {
+                dispatch_semaphore_signal(info->boomerangDone);
+                break;
+            }
         }
     }
-    
-    if(!basebins_cdhashes) {
-        return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to build BaseBin trustcache"]}];
-    }
-    
-    trustcache_file_v1 *basebinTcFile = NULL;
-    int r = trustcache_file_build_from_cdhashes(basebins_cdhashes, basebins_cdhashesCount, &basebinTcFile);
-    free(basebins_cdhashes);
-    
-    if (r == 0) {
-        int r = trustcache_file_upload_with_uuid(basebinTcFile, BASEBIN_TRUSTCACHE_UUID);
-        free(basebinTcFile);
-        if (r != 0) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to upload BaseBin trustcache: %d", r]}];
-        return nil;
-    }
-    return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedBasebinTrustcache userInfo:@{NSLocalizedDescriptionKey : @"Failed to load BaseBin trustcache"}];
+    return NULL;
 }
 
 - (NSError *)injectLaunchdHook
 {
+    // Host a boomerang server that will be used by launchdhook to get the jailbreak primitives from this app
     mach_port_t serverPort = MACH_PORT_NULL;
     mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &serverPort);
     mach_port_insert_right(mach_task_self(), serverPort, serverPort, MACH_MSG_TYPE_MAKE_SEND);
-
-    // Host a boomerang server that will be used by launchdhook to get the jailbreak primitives from this app
-    dispatch_semaphore_t boomerangDone = dispatch_semaphore_create(0);
-    dispatch_source_t serverSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_MACH_RECV, (uintptr_t)serverPort, 0, dispatch_get_main_queue());
-    dispatch_source_set_event_handler(serverSource, ^{
-        xpc_object_t xdict = nil;
-        if (!xpc_pipe_receive(serverPort, &xdict)) {
-            if (jbserver_received_boomerang_xpc_message(&gBoomerangServer, xdict) == JBS_BOOMERANG_DONE) {
-                dispatch_semaphore_signal(boomerangDone);
-            }
-        }
-    });
-    dispatch_resume(serverSource);
+    
+    struct boomerang_info info;
+    info.serverPort = serverPort;
+    info.boomerangDone = dispatch_semaphore_create(0);
+    
+    pthread_t boomerangThread;
+    pthread_create(&boomerangThread, NULL, (void *(*)(void *))boomerang_server, &info);
+    pthread_detach(boomerangThread);
 
     // Stash port to server in launchd's initPorts[2]
     // Since we don't have the neccessary entitlements, we need to do it over jbctl
@@ -380,14 +374,12 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     const char *jbctlPath = JBROOT_PATH("/basebin/jbctl");
     int spawnError = posix_spawn(&spawnedPid, jbctlPath, NULL, &attr, (char *const *)(const char *[]){ jbctlPath, "internal", "launchd_stash_port", NULL }, NULL);
     if (spawnError != 0) {
-        dispatch_cancel(serverSource);
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedLaunchdInjection userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Spawning jbctl failed with error code %d", spawnError]}];
     }
     posix_spawnattr_destroy(&attr);
     int status = 0;
     do {
         if (waitpid(spawnedPid, &status, 0) == -1) {
-            dispatch_cancel(serverSource);
             return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedLaunchdInjection userInfo:@{NSLocalizedDescriptionKey : @"Waiting for jbctl failed"}];;
         }
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
@@ -395,13 +387,11 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     // Inject launchdhook.dylib into launchd via opainject
     int r = exec_cmd(JBROOT_PATH("/basebin/opainject"), "1", JBROOT_PATH("/basebin/launchdhook.dylib"), NULL);
     if (r != 0) {
-        dispatch_cancel(serverSource);
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedLaunchdInjection userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"opainject failed with error code %d", r]}];
     }
 
     // Wait for everything to finish
-    dispatch_semaphore_wait(boomerangDone, DISPATCH_TIME_FOREVER);
-    dispatch_cancel(serverSource);
+    dispatch_semaphore_wait(info.boomerangDone, DISPATCH_TIME_FOREVER);
     mach_port_deallocate(mach_task_self(), serverPort);
 
     return nil;
@@ -410,7 +400,7 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
 /*
 - (NSError *)applyProtection
 {
-    int r = exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", "protection_init", NULL);
+    int r = [[DOEnvironmentManager sharedManager] setPrivatePrebootProtected:YES];
     if (r != 0) {
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitProtection userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed initializing protection with error: %d", r]}];
     }
@@ -419,14 +409,14 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
 
 - (NSError *)createFakeLib
 {
-    int r = exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", "fakelib_init", NULL);
+    int r = basebin_generate(false);
     if (r != 0) {
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Creating fakelib failed with error: %d", r]}];
     }
 
     cdhash_t *cdhashes = NULL;
     uint32_t cdhashesCount = 0;
-    macho_collect_untrusted_cdhashes(JBROOT_PATH("/basebin/.fakelib/dyld"), NULL, NULL, NULL, NULL, 0, &cdhashes, &cdhashesCount);
+    file_collect_untrusted_cdhashes_by_path(JBROOT_PATH("/basebin/.fakelib/dyld"), &cdhashes, &cdhashesCount);
     if (cdhashesCount != 1) return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Got unexpected number of cdhashes for dyld???: %d", cdhashesCount]}];
     
     trustcache_file_v1 *dyldTCFile = NULL;
@@ -441,7 +431,7 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : @"Failed to build dyld trustcache"}];
     }
     
-    r = exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", "fakelib_mount", NULL);
+    r = [[DOEnvironmentManager sharedManager] setFakelibMounted:YES];
     if (r != 0) {
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Mounting fakelib failed with error: %d", r]}];
     }
@@ -450,6 +440,7 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     setenv("DYLD_INSERT_LIBRARIES", "/usr/lib/systemhook.dylib", 1);
     return nil;
 }
+*/
 
 - (NSError *)ensureNoDuplicateApps
 {
@@ -515,7 +506,6 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     
     return nil;
 }
-*/
 
 - (NSError *)finalizeBootstrapIfNeeded
 {
@@ -524,10 +514,16 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
 
 - (void)runWithError:(NSError **)errOut didRemoveJailbreak:(BOOL*)didRemove showLogs:(BOOL *)showLogs
 {
+
+/****************** roothide specific ****************/
     dispatch_async(dispatch_get_main_queue(), ^{
         [[UIApplication sharedApplication] setIdleTimerDisabled:YES];
     });
-    
+	
+    exec_set_patch(false);
+/****************** roothide specific ****************/
+
+
     BOOL removeJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"removeJailbreakEnabled" fallback:NO];
     BOOL tweaksEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"tweakInjectionEnabled" fallback:YES];
     BOOL idownloadEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"idownloadEnabled" fallback:NO];
@@ -594,14 +590,7 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     *errOut = [self injectLaunchdHook];
     if (*errOut) return;
     
-    // don't use dyld-in-cache due to dyldhooks
-    setenv("DYLD_IN_CACHE", "0", 1);
-    // don't load tweak during jailbreaking
-    setenv("DISABLE_TWEAKS", "1", 1);
-    // using the stock path during jailbreaking
-    setenv("DYLD_INSERT_LIBRARIES", JBROOT_PATH("/basebin/systemhook.dylib"), 1);
-    
-/*    
+/*
     // Now that we can, protect important system files by bind mounting on top of them
     // This will be always be done during the userspace reboot
     // We also do it now though in case there is a failure between the now step and the userspace reboot
@@ -612,10 +601,38 @@ int ensure_randomized_cdhash(const char* inputPath, void* cdhashOut);
     [[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"Applying Bind Mount") debug:NO];
     *errOut = [self createFakeLib];
     if (*errOut) return;
+*/
+
+/*************************** roothide specific *******************/
+[[DOUIManager sharedInstance] sendLog:DOLocalizedString(@"RootHide Stage") debug:NO];
+
+int ret = basebin_generate(false);
+if (ret != 0) {
+    *errOut = [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Creating fakelib failed with error: %d", ret]}];
+    return;
+}
+
+ret = ensure_dyld_trustcache(JBROOT_PATH("/basebin/.fakelib/dyld"));
+if (ret != 0) {
+    *errOut = [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to upload dyld trustcache: %d", ret]}];
+    return;
+}
+
+exec_set_patch(true); /* launchdhook injected and dyld patched, 
+now we can enable dyld patching for new process */
+
+// don't use dyld-in-cache due to dyldhooks
+setenv("DYLD_IN_CACHE", "0", 1);
+// don't load tweak during jailbreaking
+setenv("DISABLE_TWEAKS", "1", 1);
+// using the stock path during jailbreaking
+setenv("DYLD_INSERT_LIBRARIES", JBROOT_PATH("/basebin/systemhook.dylib"), 1);
+
+/******************************** roothide specific *************************/
+
     
     // Unsandbox iconservicesagent so that app icons can work
     exec_cmd_trusted(JBROOT_PATH("/usr/bin/killall"), "-9", "iconservicesagent", NULL);
-*/
     
     *errOut = [self finalizeBootstrapIfNeeded];
     if (*errOut) return;

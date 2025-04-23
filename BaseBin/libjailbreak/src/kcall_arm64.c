@@ -28,8 +28,8 @@ void arm64_kexec_on_thread_locked(arm64KcallThread *callThread, kRegisterState *
 	// Kptr to actual thread state that does kcall
 	// We use the userland memory here to avoid allocating extra kernel memory
 
-	// The ret of the "str x8, [x0]", "ret" gadget  will go to exception_return
-	// which will execute the thread state in x21
+	// The ret of the "str x8, [x0]", "ret" gadget will go to exception_return
+	// This will execute the thread state in x21
 	kcallBootstrapThreadState.x[21] = phystokv(vtophys(ttep_self(), (uint64_t)callThread->alignedState));
 
 	// Make bootstrap thread set machine.kstackptr based on gadget

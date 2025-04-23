@@ -22,8 +22,16 @@ else
 build/Build/Products/Debug-iphoneos/Dopamine.app: FORCE
 	xcodebuild -scheme Dopamine -derivedDataPath build -destination 'generic/platform=iOS' CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO MARKETING_VERSION="$(shell cat ../BaseBin/_external/basebin/.version).$(shell git -C .. describe --tags --abbrev=0 | grep -E '^[0-9]+$$' || echo 0)"
 endif
+	touch build/Build/Products/Debug-iphoneos/Dopamine.app/Dopamine.roothide
+	cp -a Dopamine/Resources/*.deb build/Build/Products/Debug-iphoneos/Dopamine.app/
+ifeq ($(PALEHIDE), 1)
+	make -C Dopamine/Exploits/palera1n package
+	cp -ar Dopamine/Exploits/palera1n/.framework build/Build/Products/Debug-iphoneos/Dopamine.app/Frameworks/palera1n.framework
+endif
+
 
 clean:
+	make -C Dopamine/Exploits/palera1n clean
 	rm -rf build Payload Dopamine.ipa Dopamine.tipa
 
 build_clean:

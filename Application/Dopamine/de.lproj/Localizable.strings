@@ -42,6 +42,7 @@
 "Settings_iDownload" = "iDownload (Entwickler-Terminal)";
 "Settings_Verbose_Logs" = "Detaillierte Logs";
 "Settings_Apps_JIT" = "Erlaube JIT in Apps";
+"Settings_Allow_Old_arm64e_ABI_Libraries" = "Erlaube veraltete arm64e ABI";
 "Settings_Jetsam_Multiplier" = "Jetsam Multiplikator";
 
 // Settings Buttons

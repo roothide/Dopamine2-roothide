@@ -38,13 +38,11 @@
 "Button_Reboot" = "Reboot";
 
 // Settings Options
-"Settings_DevMode" = "Enable Developer Mode";
-"Alert_Disable_DevMode_Title" = "Disable Developer Mode";
-"Alert_Disable_DevMode_Body" = "Disabling developer mode will cause some jailbreak programs to be unable to run. Are you sure you want to continue?";
 "Settings_Tweak_Injection" = "Tweak Injection";
 "Settings_iDownload" = "iDownload (Developer Shell)";
 "Settings_Verbose_Logs" = "Verbose Logs";
 "Settings_Apps_JIT" = "Allow JIT in Apps";
+"Settings_Allow_Old_arm64e_ABI_Libraries" = "Allow Legacy arm64e Libraries";
 "Settings_Jetsam_Multiplier" = "Jetsam Multiplier";
 
 // Settings Buttons

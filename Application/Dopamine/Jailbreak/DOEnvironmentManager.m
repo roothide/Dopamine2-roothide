@@ -7,8 +7,9 @@
 
 #import "DOEnvironmentManager.h"
 
-#import <sys/mount.h>
 #import <sys/sysctl.h>
+#import <sys/mount.h>
+#import <sys/stat.h>
 #import <mach-o/dyld.h>
 #import <libgrabkernel2/libgrabkernel2.h>
 #import <libjailbreak/info.h>
@@ -192,20 +193,6 @@ int reboot3(uint64_t flags, ...);
     return error;
 }
 */
-- (void)locateJailbreakRoot
-{
-    if(gSystemInfo.jailbreakInfo.rootPath) free(gSystemInfo.jailbreakInfo.rootPath);
-    
-    NSString* jbroot_path = find_jbroot(YES);
-    if(jbroot_path) {
-        gSystemInfo.jailbreakInfo.rootPath = strdup(jbroot_path.fileSystemRepresentation);
-        gSystemInfo.jailbreakInfo.jbrand = jbrand();
-    }
-}
-- (NSError *)ensureJailbreakRootExists
-{
-    return nil;
-}
 
 - (BOOL)isArm64e
 {
@@ -236,34 +223,13 @@ int reboot3(uint64_t flags, ...);
     return trollstoreInstallation;
 }
 
-- (BOOL)isOtherJailbreakActived
-{
-    if(access("/dev/md0", F_OK)==0) {
-        return YES;
-    }
-    
-    if(access("/dev/rmd0", F_OK)==0) {
-        return YES;
-    }
-    
-    struct statfs fs;
-    int sfsret = statfs("/usr/lib", &fs);
-    if (sfsret == 0) {
-        if(strcmp(fs.f_mntonname, "/usr/lib")==0) {
-            return YES;
-        }
-    }
-    
-    return NO;
-}
-
 - (BOOL)isJailbroken
 {
-    if([self isOtherJailbreakActived])
+/************** roothide specific ***********/
+    if(!jbclient_roothide_jailbroken())
         return NO;
-    
-    if(!jbclient_get_jbroot())
-        return NO;
+/************** roothide specific ********/
+
     
     static BOOL jailbroken = NO;
     static dispatch_once_t onceToken;
@@ -538,6 +504,29 @@ int reboot3(uint64_t flags, ...);
 }
 
 /*
+- (BOOL)isFakelibMounted
+{
+    struct statfs fsb;
+    if (statfs("/usr/lib", &fsb) != 0) return NO;
+    return strcmp(fsb.f_mntonname, "/usr/lib") == 0;
+}
+
+- (int)setFakelibMounted:(BOOL)mounted
+{
+    int r = 0;
+    if (mounted != [self isFakelibMounted]) {
+        const char *arg = mounted ? "mount" : "unmount";
+        r = exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", "fakelib", arg, NULL);
+    }
+    return r;
+}
+
+- (int)setPrivatePrebootProtected:(BOOL)protected
+{
+    const char *arg = protected ? "activate" : "deactivate";
+    return exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", "protection", arg, NULL);
+}
+
 - (BOOL)isJailbreakHidden
 {
     return ![[NSFileManager defaultManager] fileExistsAtPath:@"/var/jb"];
@@ -556,16 +545,18 @@ int reboot3(uint64_t flags, ...);
             if (hidden) {
                 if ([self isJailbroken]) {
                     [self unregisterJailbreakApps];
-                    [[NSFileManager defaultManager] removeItemAtPath:JBROOT_PATH(@"/basebin/.fakelib/systemhook.dylib") error:nil];
-                    carbonCopy(JBROOT_PATH(@"/basebin/.dyld.orig"), JBROOT_PATH(@"/basebin/.fakelib/dyld"));
+                    [self setPrivatePrebootProtected:NO];
+                    [self setFakelibMounted:NO];
+                    jbclient_platform_set_systemwide_domain_enabled(false);
                 }
                 [[NSFileManager defaultManager] removeItemAtPath:@"/var/jb" error:nil];
             }
             else {
                 [[NSFileManager defaultManager] createSymbolicLinkAtPath:@"/var/jb" withDestinationPath:JBROOT_PATH(@"/") error:nil];
                 if ([self isJailbroken]) {
-                    carbonCopy(JBROOT_PATH(@"/basebin/.dyld.patched"), JBROOT_PATH(@"/basebin/.fakelib/dyld"));
-                    carbonCopy(JBROOT_PATH(@"/basebin/systemhook.dylib"), JBROOT_PATH(@"/basebin/.fakelib/systemhook.dylib"));
+                    jbclient_platform_set_systemwide_domain_enabled(true);
+                    [self setFakelibMounted:YES];
+                    [self setPrivatePrebootProtected:YES];
                     [self refreshJailbreakApps];
                 }
             }

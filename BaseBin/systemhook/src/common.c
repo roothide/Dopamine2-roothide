@@ -1,4 +1,5 @@
 #include "common.h"
+#include "roothider.h"
 #include <xpc/xpc.h>
 #include "launchd.h"
 #include <mach-o/dyld.h>
@@ -58,23 +59,8 @@ void string_enumerate_components(const char *string, const char *separator, void
 	free(stringCopy);
 }
 
-static kSpawnConfig spawn_config_for_executable(const char* path, char *const argv[restrict])
+kSpawnConfig spawn_config_for_executable(const char* path, char *const argv[restrict])
 {
-	if (!strcmp(path, "/usr/libexec/xpcproxy")) {
-		if (argv) {
-			if (argv[0]) {
-				if (argv[1]) {
-					if (string_has_prefix(argv[1], "com.apple.WebKit.WebContent")) {
-						// The most sandboxed process on the system, we can't support it on iOS 16+ for now
-						if (__builtin_available(iOS 16.0, *)) {
-							return 0;
-						}
-					}
-				}
-			}
-		}
-	}
-
 	// Blacklist to ensure general system stability
 	// I don't like this but for some processes it seems neccessary
 	const char *processBlacklist[] = {
@@ -102,29 +88,6 @@ int __execve_orig(const char *path, char *const argv[], char *const envp[])
 	return syscall(SYS_execve, path, argv, envp);
 }
 
-#define APP_PATH_PREFIX "/private/var/containers/Bundle/Application/"
-
-bool is_app_path(const char* path)
-{
-    if(!path) return false;
-
-    char rp[PATH_MAX];
-    if(!realpath(path, rp)) return false;
-
-    if(strncmp(rp, APP_PATH_PREFIX, sizeof(APP_PATH_PREFIX)-1) != 0)
-        return false;
-
-    char* p1 = rp + sizeof(APP_PATH_PREFIX)-1;
-    char* p2 = strchr(p1, '/');
-    if(!p2) return false;
-
-    //is normal app or jailbroken app/daemon?
-    if((p2 - p1) != (sizeof("xxxxxxxx-xxxx-xxxx-yxxx-xxxxxxxxxxxx")-1))
-        return false;
-
-	return true;
-}
-
 // 1. Ensure the binary about to be spawned and all of it's dependencies are trust cached
 // 2. Insert "DYLD_INSERT_LIBRARIES=/usr/lib/systemhook.dylib" into all binaries spawned
 // 3. Increase Jetsam limit to more sane value (Multipler defined as JETSAM_MULTIPLIER)
@@ -133,7 +96,7 @@ static int spawn_exec_hook_common(const char *path,
 								  char *const argv[restrict],
 								  char *const envp[restrict],
 			   struct _posix_spawn_args_desc *desc,
-										int (*trust_binary)(const char *path, xpc_object_t preferredArchsArray),
+										int (*trust_binary)(const char *path),
 									   double jetsamMultiplier,
 									    int (^orig)(char *const envp[restrict]))
 {
@@ -147,37 +110,8 @@ static int spawn_exec_hook_common(const char *path,
 	kSpawnConfig spawnConfig = spawn_config_for_executable(path, argv);
 
 	if (spawnConfig & kSpawnConfigTrust) {
-		bool preferredArchsSet = false;
-		cpu_type_t preferredTypes[4];
-		cpu_subtype_t preferredSubtypes[4];
-		size_t sizeOut = 0;
-		if (posix_spawnattr_getarchpref_np(&attr, 4, preferredTypes, preferredSubtypes, &sizeOut) == 0) {
-			for (size_t i = 0; i < sizeOut; i++) {
-				if (preferredTypes[i] != 0 || preferredSubtypes[i] != UINT32_MAX) {
-					preferredArchsSet = true;
-					break;
-				}
-			}
-		}
-
-		xpc_object_t preferredArchsArray = NULL;
-		if (preferredArchsSet) {
-			preferredArchsArray = xpc_array_create_empty();
-			for (size_t i = 0; i < sizeOut; i++) {
-				xpc_object_t curArch = xpc_dictionary_create_empty();
-				xpc_dictionary_set_uint64(curArch, "type", preferredTypes[i]);
-				xpc_dictionary_set_uint64(curArch, "subtype", preferredSubtypes[i]);
-				xpc_array_set_value(preferredArchsArray, XPC_ARRAY_APPEND, curArch);
-				xpc_release(curArch);
-			}
-		}
-
 		// Upload binary to trustcache if needed
-		trust_binary(path, preferredArchsArray);
-
-		if (preferredArchsArray) {
-			xpc_release(preferredArchsArray);
-		}
+		trust_binary(path);
 	}
 
 	const char *existingLibraryInserts = envbuf_getenv((const char **)envp, "DYLD_INSERT_LIBRARIES");
@@ -187,17 +121,10 @@ static int spawn_exec_hook_common(const char *path,
 			if (!strcmp(existingLibraryInsert, HOOK_DYLIB_PATH)) {
 				systemHookAlreadyInserted = true;
 			}
-			else if (spawnConfig & kSpawnConfigTrust) {
-				// Upload everything already in DYLD_INSERT_LIBRARIES to trustcache aswell
-				trust_binary(existingLibraryInsert, NULL);
-			}
 		});
 	}
 
 	int JBEnvAlreadyInsertedCount = (int)systemHookAlreadyInserted;
-
-	struct statfs fs;
-	bool isPlatformProcess = statfs(path, &fs)==0 && strcmp(fs.f_mntonname, "/private/var") != 0;
 
 	// Check if we can find at least one reason to not insert jailbreak related environment variables
 	// In this case we also need to remove pre existing environment variables if they are already set
@@ -209,7 +136,13 @@ static int spawn_exec_hook_common(const char *path,
 			break;
 		}
 
-		bool isAppPath = is_app_path(path);
+
+/*********** roothide specific ************/
+struct statfs fs = {0};
+bool isAppPath = is_app_path(path);
+bool nonJailbreakPath = statfs(path, &fs)==0 && strcmp(fs.f_mntonname, "/private/var") != 0;
+/*********************************** roothide specific *************************************/
+
 
 		// Check if we can find a _SafeMode or _MSSafeMode variable
 		// In this case we do not want to inject anything
@@ -217,14 +150,14 @@ static int spawn_exec_hook_common(const char *path,
 		const char *msSafeModeValue = envbuf_getenv((const char **)envp, "_MSSafeMode");
 		if (safeModeValue) {
 			if (!strcmp(safeModeValue, "1")) {
-				if(isPlatformProcess||isAppPath) shouldInsertJBEnv = false;
+				if(nonJailbreakPath||isAppPath) shouldInsertJBEnv = false;
 				hasSafeModeVariable = true;
 				break;
 			}
 		}
 		if (msSafeModeValue) {
 			if (!strcmp(msSafeModeValue, "1")) {
-				if(isPlatformProcess||isAppPath) shouldInsertJBEnv = false;
+				if(nonJailbreakPath||isAppPath) shouldInsertJBEnv = false;
 				hasSafeModeVariable = true;
 				break;
 			}
@@ -331,17 +264,16 @@ int posix_spawn_hook_shared(pid_t *restrict pid,
 						  	    char *const argv[restrict],
 					   			char *const envp[restrict],
 					   				  void *orig,
-					   				  int (*trust_binary)(const char *path, xpc_object_t preferredArchsArray),
+					   				  int (*trust_binary)(const char *path),
 					   				  int (*set_process_debugged)(uint64_t pid, bool fullyDebugged),
 					   				 double jetsamMultiplier)
 {
 	int (*posix_spawn_orig)(pid_t *restrict, const char *restrict, struct _posix_spawn_args_desc *, char *const[restrict], char *const[restrict]) = orig;
 
-	int r = spawn_exec_hook_common(path, argv, envp, desc, trust_binary, jetsamMultiplier, ^int(char *const envp_patched[restrict]){
+	int r = spawn_exec_hook_common(path, argv, envp, desc, trust_binary, jetsamMultiplier, ^int(char *const envp_patched[restrict]) {
 		return posix_spawn_orig(pid, path, desc, argv, envp_patched);
 	});
 
-/*handled in the caller due the roothide alwasy set POSIX_SPAWN_START_SUSPENDED
 	if (r == 0 && pid && desc) {
 		posix_spawnattr_t attr = desc->attrp;
 		short flags = 0;
@@ -354,7 +286,6 @@ int posix_spawn_hook_shared(pid_t *restrict pid,
 			}
 		}
 	}
-*/
 
 	return r;
 }
@@ -363,7 +294,7 @@ int execve_hook_shared(const char *path,
 					   char *const argv[],
 					   char *const envp[],
 			 				 void *orig,
-			 				 int (*trust_binary)(const char *path, xpc_object_t preferredArchsArray))
+			 				 int (*trust_binary)(const char *path))
 {
 	int (*execve_orig)(const char *, char *const[], char *const[]) = orig;
 
@@ -372,48 +303,4 @@ int execve_hook_shared(const char *path,
 	});
 
 	return r;
-}
-
-
-#include <sys/sysctl.h>
-int cached_namelen = 0;
-int cached_name[CTL_MAXNAME+2]={0};
-int syscall__sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen);
-int __sysctl(int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen);
-int __sysctl_hook(int *name, u_int namelen, void *oldp, size_t *oldlenp, const void *newp, size_t newlen)
-{
-	static dispatch_once_t onceToken;
-	dispatch_once(&onceToken, ^{
-		int mib[] = {0, 3}; //https://github.com/apple-oss-distributions/Libc/blob/899a3b2d52d95d75e05fb286a5e64975ec3de757/gen/FreeBSD/sysctlbyname.c#L24
-		size_t namelen = sizeof(cached_name);
-		const char* query = "security.mac.amfi.developer_mode_status";
-		if(syscall__sysctl(mib, sizeof(mib)/sizeof(mib[0]), cached_name, &namelen, (void*)query, strlen(query))==0) {
-			cached_namelen = namelen / sizeof(cached_name[0]);
-		}
-	});
-
-	if(name && namelen && cached_namelen &&
-	 namelen==cached_namelen && memcmp(cached_name, name, namelen*sizeof(int))==0) {
-		if(oldp && oldlenp && *oldlenp>=sizeof(int)) {
-			*(int*)oldp = 1;
-			*oldlenp = sizeof(int);
-			return 0;
-		}
-	}
-
-	return syscall__sysctl(name,namelen,oldp,oldlenp,newp,newlen);
-}
-
-int syscall__sysctlbyname(const char *name, size_t namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
-int __sysctlbyname(const char *name, size_t namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
-int __sysctlbyname_hook(const char *name, size_t namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen)
-{
-	if(name && namelen && strncmp(name, "security.mac.amfi.developer_mode_status", namelen)==0) {
-		if(oldp && oldlenp && *oldlenp>=sizeof(int)) {
-			*(int*)oldp = 1;
-			*oldlenp = sizeof(int);
-			return 0;
-		}
-	}
-	return syscall__sysctlbyname(name,namelen,oldp,oldlenp,newp,newlen);
 }

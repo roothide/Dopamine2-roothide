@@ -8,29 +8,25 @@ extern char **environ;
 #pragma GCC diagnostic ignored "-Wobjc-method-access"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-#define PROC_PIDPATHINFO_MAXSIZE        (4*MAXPATHLEN)
 /*lsd can only get path for normal app via proc_pidpath, or we can use
-  xpc_connection_get_audit_token([xpc _xpcConnection], &token) //_LSCopyExecutableURLForXPCConnection
+  xpc_connection_get_audit_token([connection _xpcConnection], &token) //_LSCopyExecutableURLForXPCConnection
   proc_pidpath_audittoken(tokenarg, buffer, size) //_LSCopyExecutableURLForAuditToken 
   */
 
 %hook _LSCanOpenURLManager
 
-- (BOOL)canOpenURL:(NSURL*)url publicSchemes:(BOOL)ispublic privateSchemes:(BOOL)isprivate XPCConnection:(NSXPCConnection*)xpc error:(NSError*)err
+- (BOOL)canOpenURL:(NSURL*)url publicSchemes:(BOOL)ispublic privateSchemes:(BOOL)isprivate XPCConnection:(NSXPCConnection*)connection error:(NSError*)err
 {
 	BOOL result = %orig;
 
-	if(!result) return result;
-	if(!xpc) return result;
-
-	char pathbuf[PROC_PIDPATHINFO_MAXSIZE]={0};
-	if(proc_pidpath(xpc.processIdentifier, pathbuf, sizeof(pathbuf)) <= 0) {
-		NSLog(@"canOpenURL: unable to get proc path for %d", xpc.processIdentifier);
+	if(!result || !connection) {
 		return result;
 	}
 
-	NSLog(@"canOpenURL:%@ publicSchemes:%d privateSchemes:%d XPCConnection:%@ proc:%d,%s", url, ispublic, isprivate, xpc, xpc.processIdentifier, pathbuf);
-	//if(xpc) NSLog(@"canOpenURL:xpc=%@", xpc);
+	pid_t pid = connection.processIdentifier;
+
+	NSLog(@"canOpenURL:%@ publicSchemes:%d privateSchemes:%d XPCConnection:%@ proc:%d,%s", url, ispublic, isprivate, connection, pid, proc_get_path(pid,NULL));
+	//if(connection) NSLog(@"canOpenURL connection=%@", connection);
 
 	NSArray* jbschemes = @[
 		@"filza", 
@@ -49,10 +45,10 @@ extern char **environ;
 		@"postbox",
 	];
 
-	if(isSandboxedApp(xpc.processIdentifier, pathbuf))
+	if(jbclient_blacklist_check_pid(pid)==true)
 	{
 		if([jbschemes containsObject:url.scheme.lowercaseString]) {
-			NSLog(@"block %@ for %s", url, pathbuf);
+			NSLog(@"block %@ for %s", url, proc_get_path(pid,NULL));
 			return NO;
 		}
 	}
@@ -65,7 +61,7 @@ extern char **environ;
 
 %hook _LSQueryContext
 
--(NSMutableDictionary*)_resolveQueries:(NSMutableSet*)queries XPCConnection:(NSXPCConnection*)xpc error:(NSError*)err 
+-(NSMutableDictionary*)_resolveQueries:(NSMutableSet*)queries XPCConnection:(NSXPCConnection*)connection error:(NSError*)err 
 {
 	NSMutableDictionary* result = %orig;
 	/*
@@ -75,18 +71,17 @@ extern char **environ;
 	}
 	*/
 
-	if(!result) return result;
-	if(!xpc) return result;
-	
-	char pathbuf[PROC_PIDPATHINFO_MAXSIZE]={0};
-	if(proc_pidpath(xpc.processIdentifier, pathbuf, sizeof(pathbuf)) <= 0) {
-		NSLog(@"_resolveQueries: unable to get proc path for %d", xpc.processIdentifier);
+	if(!result || !connection) {
 		return result;
 	}
 
-	if(!isNormalAppPath(pathbuf)) return result;
+	pid_t pid = connection.processIdentifier;
 
-	NSLog(@"_resolveQueries:%@:%@ XPCConnection:%@ result=%@/%ld proc:%d,%s", [queries class], queries, xpc, result.class, result.count, xpc.processIdentifier, pathbuf);
+	if(jbclient_blacklist_check_pid(pid)==false) {
+		return result;
+	}
+
+	NSLog(@"_resolveQueries:%@:%@ XPCConnection:%@ result=%@/%ld proc:%d,%s", [queries class], queries, connection, result.class, result.count, pid, proc_get_path(pid,NULL));
 	//NSLog(@"result=%@, %@", result.allKeys, result.allValues);
 	for(id key in result)
 	{
@@ -149,7 +144,7 @@ extern char **environ;
 				NSArray* _pluginUnits = [unitsResult valueForKey:@"_pluginUnits"];
 				NSLog(@"LSPlugInQueryAllUnits: _dbUUID=%@, _pluginUnits count=%ld", _dbUUID, _pluginUnits.count);
 				id unitQuery = [[NSClassFromString(@"LSPlugInQueryWithUnits") alloc] initWithPlugInUnits:_pluginUnits forDatabaseWithUUID:_dbUUID];
-				NSMutableDictionary* queriesResult = [self _resolveQueries:[NSSet setWithObject:unitQuery] XPCConnection:xpc error:err];
+				NSMutableDictionary* queriesResult = [self _resolveQueries:[NSSet setWithObject:unitQuery] XPCConnection:connection error:err];
 				if(queriesResult)
 				{
 					for(id queryKey in queriesResult)

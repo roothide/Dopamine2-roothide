@@ -4,6 +4,7 @@
 #include <xpc/xpc.h>
 #include <xpc_private.h>
 #include <stdint.h>
+#include "signatures.h"
 
 void jbclient_xpc_set_custom_port(mach_port_t serverPort);
 
@@ -12,8 +13,8 @@ xpc_object_t jbserver_xpc_send(uint64_t domain, uint64_t action, xpc_object_t xa
 
 char *jbclient_get_jbroot(void);
 char *jbclient_get_boot_uuid(void);
-int jbclient_trust_binary(const char *binaryPath, xpc_object_t preferredArchsArray);
-int jbclient_trust_library(const char *libraryPath, void *addressInCaller);
+int jbclient_trust_file(int fd, struct siginfo *siginfo);
+int jbclient_trust_file_by_path(const char *path);
 int jbclient_process_checkin(char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut, bool *fullyDebuggedOut);
 int jbclient_fork_fix(uint64_t childPid);
 int jbclient_cs_revalidate(void);
@@ -27,6 +28,7 @@ int jbclient_platform_jbsettings_set(const char *key, xpc_object_t value);
 int jbclient_platform_jbsettings_set_bool(const char *key, bool boolValue);
 int jbclient_platform_jbsettings_set_uint64(const char *key, uint64_t uint64Value);
 int jbclient_platform_jbsettings_set_double(const char *key, double doubleValue);
+int jbclient_platform_set_systemwide_domain_enabled(bool enabled);
 int jbclient_watchdog_intercept_userspace_panic(const char *panicMessage);
 int jbclient_watchdog_get_last_userspace_panic(char **panicMessage);
 int jbclient_root_get_physrw(bool singlePTE, uint64_t *singlePTEAsidPtr);
@@ -39,9 +41,18 @@ int jbclient_root_trustcache_add_cdhash(uint8_t *cdhashData, size_t cdhashLen);
 int jbclient_root_trustcache_clear(void);
 int jbclient_boomerang_done(void);
 
-int jbclient_cs_drop_get_task_allow(void);
-int jbclient_patch_spawn(int pid, bool resume);
-int jbclient_patch_exec_add(const char* exec_path, bool resume);
-int jbclient_patch_exec_del(const char* exec_path);
+
+/*********** roothide specfic **********/
+bool jbclient_palehide_present();
+bool jbclient_roothide_jailbroken();
+mach_port_t jbclient_jailbreakd_lookup();
+mach_port_t jbclient_jailbreakd_checkin();
+bool jbclient_blacklist_check_pid(pid_t pid);
+bool jbclient_blacklist_check_path(const char* path);
+bool jbclient_blacklist_check_bundle(const char* bundle);
+int jbclient_trust_library_recurse(const char *libraryPath, void *addressInCaller);
+int jbclient_trust_executable_recurse(const char *executablePath, xpc_object_t preferredArchsArray);
+/************** roothide specfic *************/
+
 
 #endif
