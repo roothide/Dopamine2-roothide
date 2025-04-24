@@ -391,6 +391,7 @@ int randomizeAndLoadBasebinTrustcache(const char* basebinPath)
     return 0;
 }
 
+kern_return_t bootstrap_look_up(mach_port_t port, const char *service, mach_port_t *server_port);
 
 bool otherJailbreakActived()
 {
@@ -408,6 +409,12 @@ bool otherJailbreakActived()
     //         return true;
     //     }
     // }
+
+    mach_port_t port = MACH_PORT_NULL;
+    kern_return_t kr = bootstrap_look_up(bootstrap_port, "com.opa334.jailbreakd", &port);
+    if(kr == KERN_SUCCESS) {
+        return true; // roothide dopamine 1.x
+    }
 
     const char* rootpath = jbclient_get_jbroot();
     if(rootpath && strlen(rootpath) > 0) {

@@ -154,6 +154,10 @@ int execTraceProcess(pid_t pid, uint64_t traced)
 
         pthread_t thread;
         pthread_create(&thread, NULL, exception_server, (void*)(uintptr_t)exception_port);
+
+        __uint64_t tid = 0;
+        pthread_threadid_np(thread, &tid);
+        JBLogDebug("exception_server thread: %x tid=%d", thread, tid);
     });
 
     if(!proc_cantrace(pid)) {

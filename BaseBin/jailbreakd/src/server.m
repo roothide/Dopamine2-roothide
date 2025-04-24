@@ -5,6 +5,17 @@
 #include <libjailbreak/libjailbreak.h>
 #include <libjailbreak/roothider.h>
 
+void jailbreakd_reply_message(xpc_object_t msgId, xpc_object_t reply)
+{
+	char* desc = NULL;
+	JBLogDebug("reply message %d with %s", msgId, (desc=xpc_copy_description(reply)));
+	if(desc) free(desc);
+	int err = xpc_pipe_routine_reply(reply);
+	if (err != 0) {
+		JBLogError("Error %d sending response", err);
+	}
+}
+
 void jailbreakd_received_message(mach_port_t port)
 {
 	@autoreleasepool {
@@ -56,7 +67,7 @@ void jailbreakd_received_message(mach_port_t port)
 				case JBD_MSG_SPAWN_EXEC_START: {
 					bool resume = xpc_dictionary_get_bool(message, "resume");
 					const char* execfile = xpc_dictionary_get_string(message, "execfile");
-					JBLogDebug("add exec patch: %d %s", clientPid, execfile);
+					JBLogDebug("spawn exec start: %d %s", clientPid, execfile);
 					int64_t result = spawnExecPatchAdd(clientPid, resume);
 					xpc_dictionary_set_int64(reply, "result", result);
 					break;
@@ -64,24 +75,31 @@ void jailbreakd_received_message(mach_port_t port)
 
 				case JBD_MSG_SPAWN_EXEC_CANCEL: {
 					const char* execfile = xpc_dictionary_get_string(message, "execfile");
-					JBLogDebug("del exec patch: %d %s", clientPid, execfile);
+					JBLogDebug("spawn exec cancel: %d %s", clientPid, execfile);
 					int64_t result = spawnExecPatchDel(clientPid);
 					xpc_dictionary_set_int64(reply, "result", result);
 					break;
 				}
 
 				case JBD_MSG_EXEC_TRACE_START: {
-					int64_t result = -1;
-					uint64_t traced = xpc_dictionary_get_uint64(message, "traced");
-					const char* execfile = xpc_dictionary_get_string(message, "execfile");
-					result = execTraceProcess(clientPid, traced);
-					xpc_dictionary_set_int64(reply, "result", result);
+					//dead lock: jbd->ptrace->kernel->amfi port->launchd->spawn amfid->jdb
+					dispatch_async(dispatch_get_global_queue(0, 0), ^{
+						int64_t result = -1;
+						uint64_t traced = xpc_dictionary_get_uint64(message, "traced");
+						const char* execfile = xpc_dictionary_get_string(message, "execfile");
+						JBLogDebug("exec trace start: %d %s", clientPid, execfile);
+						result = execTraceProcess(clientPid, traced);
+						xpc_dictionary_set_int64(reply, "result", result);
+						jailbreakd_reply_message(msgId, reply);
+					});
+					reply = nil; //reply later
 					break;
 				}
 
 				case JBD_MSG_EXEC_TRACE_CANCEL: {
 					int64_t result = -1;
 					const char* execfile = xpc_dictionary_get_string(message, "execfile");
+					JBLogDebug("exec trace cancel: %d %s", clientPid, execfile);
 					result = execTraceCancel(clientPid);
 					xpc_dictionary_set_int64(reply, "result", result);
 					break;
@@ -119,13 +137,7 @@ void jailbreakd_received_message(mach_port_t port)
 			}
 		}
 		if (reply) {
-			char* desc = NULL;
-			JBLogDebug("reply message %d with %s", msgId, (desc=xpc_copy_description(reply)));
-			if(desc) free(desc);
-			err = xpc_pipe_routine_reply(reply);
-			if (err != 0) {
-				JBLogError("Error %d sending response", err);
-			}
+			jailbreakd_reply_message(msgId, reply);
 		}
 	}
 }

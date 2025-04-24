@@ -1108,12 +1108,6 @@ int getCFMajorVersion(void)
         
         ASSERT([fm fileExistsAtPath:jbrootPrefix(@"/.installed_dopamine")]);
         
-        NSString* dopamineVersion = [NSString stringWithContentsOfFile:jbrootPrefix(@"/.installed_dopamine") encoding:NSUTF8StringEncoding error:nil];
-        if(dopamineVersion.intValue != DOPAMINE_INSTALL_VERSION) {
-            completion([NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedExtracting userInfo:@{NSLocalizedDescriptionKey : @"\n\nYour device has been jailbroken through the roothide Dopamine 1.x\n\n\n"}]);
-            return -1;
-        }
-        
         STRAPLOG("Status: Rerandomize jbroot");
         
         if([self ReRandomizeBootstrap:completion] != 0) {

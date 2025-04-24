@@ -28,7 +28,7 @@ int jbclient_platform_jbsettings_set(const char *key, xpc_object_t value);
 int jbclient_platform_jbsettings_set_bool(const char *key, bool boolValue);
 int jbclient_platform_jbsettings_set_uint64(const char *key, uint64_t uint64Value);
 int jbclient_platform_jbsettings_set_double(const char *key, double doubleValue);
-int jbclient_platform_set_systemwide_domain_enabled(bool enabled);
+//int jbclient_platform_set_systemwide_domain_enabled(bool enabled);
 int jbclient_watchdog_intercept_userspace_panic(const char *panicMessage);
 int jbclient_watchdog_get_last_userspace_panic(char **panicMessage);
 int jbclient_root_get_physrw(bool singlePTE, uint64_t *singlePTEAsidPtr);
@@ -37,7 +37,7 @@ int jbclient_root_get_sysinfo(xpc_object_t *sysInfoOut);
 int jbclient_root_steal_ucred(uint64_t ucredToSteal, uint64_t *orgUcred);
 int jbclient_root_set_mac_label(uint64_t slot, uint64_t label, uint64_t *orgLabel);
 int jbclient_root_trustcache_info(xpc_object_t *infoOut);
-int jbclient_root_trustcache_add_cdhash(uint8_t *cdhashData, size_t cdhashLen);
+//int jbclient_root_trustcache_add_cdhash(uint8_t *cdhashData, size_t cdhashLen);
 int jbclient_root_trustcache_clear(void);
 int jbclient_boomerang_done(void);
 

@@ -339,6 +339,7 @@ int jbclient_platform_jbsettings_set_double(const char *key, double doubleValue)
 	return r;
 }
 
+/*
 int jbclient_platform_set_systemwide_domain_enabled(bool enabled)
 {
 	xpc_object_t xargs = xpc_dictionary_create_empty();
@@ -352,6 +353,7 @@ int jbclient_platform_set_systemwide_domain_enabled(bool enabled)
 	}
 	return -1;
 }
+*/
 
 int jbclient_watchdog_intercept_userspace_panic(const char *panicMessage)
 {
@@ -470,6 +472,7 @@ int jbclient_root_trustcache_info(xpc_object_t *infoOut)
 	return -1;
 }
 
+/*
 int jbclient_root_trustcache_add_cdhash(uint8_t *cdhashData, size_t cdhashLen)
 {
 	xpc_object_t xargs = xpc_dictionary_create_empty();
@@ -483,6 +486,7 @@ int jbclient_root_trustcache_add_cdhash(uint8_t *cdhashData, size_t cdhashLen)
 	}
 	return -1;
 }
+*/
 
 int jbclient_root_trustcache_clear(void)
 {

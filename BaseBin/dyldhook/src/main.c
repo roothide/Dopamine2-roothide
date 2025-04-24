@@ -78,9 +78,4 @@ void dyldhook_init(uintptr_t kernelParams)
 
 	// If all is well, do check-in right here before dyld_start!
 	dyldhook_perform_checkin();
-
-	// Mark dyldhook as having been initialized
-	// This will tell mig_get_reply_port to call out to the original dyld implementation
-	// Since the only reason we need to reimplement it is to work right from _dyld_start
-	gDyldhookInitDone = true;
 }
