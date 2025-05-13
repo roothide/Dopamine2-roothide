@@ -1,5 +1,5 @@
-#ifndef INFO_H
-#define INFO_H
+#ifndef __INFO_H
+#define __INFO_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -25,18 +25,22 @@ struct system_info {
 		uint64_t PT_INDEX_MAX;
 		uint64_t nsysent;
 		uint64_t mach_trap_count;
-        uint64_t nchashtbl;
-        uint64_t nchashmask;
 	} kernelConstant;
 
 	struct {
 		uint64_t usesPACBypass;
 		char *rootPath;
-        uint64_t jbrand;
+
+/************ roothide specfic *********/
+		uint64_t jbrand;
+		uint64_t palera1n;
+		bool dyld_patch_enabled;
+/************ roothide specfic *********/
 	} jailbreakInfo;
 
 	struct {
 		bool markAppsAsDebugged;
+		double jetsamMultiplier;
 	} jailbreakSettings;
 
 	struct {
@@ -79,6 +83,14 @@ struct system_info {
 		uint64_t ppl_trust_cache_rt;
 		uint64_t mach_kobj_count;
 		uint64_t developer_mode_enabled;
+
+
+/************** roothide specfic ***********/
+		uint64_t nchashtbl;
+		uint64_t nchashmask;
+		uint64_t launch_env_logging;
+		uint64_t developer_mode_status;
+/************** roothide specfic ***********/
 	} kernelSymbol;
 
 	struct {
@@ -121,48 +133,12 @@ struct system_info {
 			uint32_t syscall_filter_mask;
 			uint32_t mach_trap_filter_mask;
 			uint32_t mach_kobj_filter_mask;
+			uint32_t t_flags_ro;
 		} proc_ro;
 
 		struct {
-			uint64_t ofiles_start; // fd_ofiles
+			uint64_t ofiles_start;
 		} filedesc;
-
-        struct {
-            uint32_t fileglob; // fp_glob
-        } fileproc;
-
-        struct {
-            uint32_t vnode; // fg_data
-        } fileglob;
-
-        struct {
-            uint32_t id;
-            uint32_t usecount;
-            struct {
-                uint32_t tqh_first;
-                uint32_t tqh_last;
-            } ncchildren;
-            uint32_t parent;
-            struct {
-                uint32_t lh_first;
-            } nclinks;
-        } vnode;
-
-        struct {
-            bool smr;
-            struct {
-                uint32_t tqe_next;
-                uint32_t tqe_prev;
-            } child;
-            struct {
-                uint32_t le_next;
-                uint32_t le_prev;
-            } hash;
-            uint32_t dvp;
-            uint32_t vp;
-            uint32_t hashval;
-            uint32_t name;
-        } namecache;
 
 		struct {
 			uint32_t uid;
@@ -178,6 +154,7 @@ struct system_info {
 			uint32_t map;
 			uint32_t threads;
 			uint32_t itk_space;
+			uint32_t flags;
 			uint32_t task_can_transfer_memory_ownership;
 			uint32_t mach_trap_filter_mask;
 			uint32_t mach_kobj_filter_mask;
@@ -281,19 +258,30 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelConstant.smrBase); \
 	iterator(ctx, kernelConstant.PT_INDEX_MAX); \
 	iterator(ctx, kernelConstant.nsysent); \
-	iterator(ctx, kernelConstant.mach_trap_count); \
-    iterator(ctx, kernelConstant.nchashtbl); \
-    iterator(ctx, kernelConstant.nchashmask);
+	iterator(ctx, kernelConstant.mach_trap_count);
 
 #define JAILBREAK_INFO_ITERATE(ctx, iterator) \
+	\
+	iterator(ctx, jailbreakInfo.jbrand); \
+	iterator(ctx, jailbreakInfo.palera1n); \
+	iterator(ctx, jailbreakInfo.dyld_patch_enabled); \
+	\
+	\
 	iterator(ctx, jailbreakInfo.usesPACBypass); \
-	iterator(ctx, jailbreakInfo.rootPath); \
-	iterator(ctx, jailbreakInfo.jbrand);
+	iterator(ctx, jailbreakInfo.rootPath);
 
 #define JAILBREAK_SETTINGS_ITERATE(ctx, iterator) \
-	iterator(ctx, jailbreakSettings.markAppsAsDebugged);
+	iterator(ctx, jailbreakSettings.markAppsAsDebugged); \
+	iterator(ctx, jailbreakSettings.jetsamMultiplier);
 
 #define KERNEL_SYMBOLS_ITERATE(ctx, iterator) \
+	\
+	iterator(ctx, kernelSymbol.nchashtbl); \
+	iterator(ctx, kernelSymbol.nchashmask); \
+	iterator(ctx, kernelSymbol.launch_env_logging); \
+	iterator(ctx, kernelSymbol.developer_mode_status); \
+	\
+	\
 	iterator(ctx, kernelSymbol.perfmon_dev_open); \
 	iterator(ctx, kernelSymbol.vn_kqfilter); \
 	iterator(ctx, kernelSymbol.proc_find); \
@@ -367,28 +355,10 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelStruct.proc_ro.syscall_filter_mask); \
 	iterator(ctx, kernelStruct.proc_ro.mach_trap_filter_mask); \
 	iterator(ctx, kernelStruct.proc_ro.mach_kobj_filter_mask); \
+	iterator(ctx, kernelStruct.proc_ro.t_flags_ro); \
 	\
 	iterator(ctx, kernelStruct.filedesc.ofiles_start); \
-	iterator(ctx, kernelStruct.fileproc.fileglob); \
-    iterator(ctx, kernelStruct.fileglob.vnode); \
-    \
-    iterator(ctx, kernelStruct.vnode.id); \
-    iterator(ctx, kernelStruct.vnode.usecount); \
-    iterator(ctx, kernelStruct.vnode.ncchildren.tqh_first); \
-    iterator(ctx, kernelStruct.vnode.ncchildren.tqh_last); \
-    iterator(ctx, kernelStruct.vnode.parent); \
-    iterator(ctx, kernelStruct.vnode.nclinks.lh_first); \
-    \
-    iterator(ctx, kernelStruct.namecache.smr); \
-    iterator(ctx, kernelStruct.namecache.child.tqe_next); \
-    iterator(ctx, kernelStruct.namecache.child.tqe_prev); \
-    iterator(ctx, kernelStruct.namecache.hash.le_next); \
-    iterator(ctx, kernelStruct.namecache.hash.le_prev); \
-    iterator(ctx, kernelStruct.namecache.dvp); \
-    iterator(ctx, kernelStruct.namecache.vp); \
-    iterator(ctx, kernelStruct.namecache.hashval); \
-    iterator(ctx, kernelStruct.namecache.name); \
-    \
+	\
 	iterator(ctx, kernelStruct.ucred.uid); \
 	iterator(ctx, kernelStruct.ucred.ruid); \
 	iterator(ctx, kernelStruct.ucred.svuid); \
@@ -400,6 +370,7 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelStruct.task.map); \
 	iterator(ctx, kernelStruct.task.threads); \
 	iterator(ctx, kernelStruct.task.itk_space); \
+	iterator(ctx, kernelStruct.task.flags); \
 	iterator(ctx, kernelStruct.task.task_can_transfer_memory_ownership); \
 	iterator(ctx, kernelStruct.task.mach_trap_filter_mask); \
 	iterator(ctx, kernelStruct.task.mach_kobj_filter_mask); \
@@ -484,6 +455,7 @@ __attribute__((__unused__)) static void _safe_xpc_dictionary_set_string(xpc_obje
 	char *: _safe_xpc_dictionary_set_string(xdict, name, (const char*)(uint64_t)value), \
 	uint64_t: xpc_dictionary_set_uint64(xdict, name, (uint64_t)value), \
 	uint32_t: xpc_dictionary_set_uint64(xdict, name, (uint64_t)value), \
+	double: xpc_dictionary_set_double(xdict, name, *(double *)&value), \
 	bool: xpc_dictionary_set_bool(xdict, name, (bool)value) \
 )
 
@@ -492,6 +464,7 @@ __attribute__((__unused__)) static void _safe_xpc_dictionary_set_string(xpc_obje
 	char *: _safe_xpc_dictionary_get_string(xdict, name, (char **)&target), \
 	uint64_t: *((uint64_t *)&target) = xpc_dictionary_get_uint64(xdict, name), \
 	uint32_t: *((uint32_t *)&target) = (uint32_t)xpc_dictionary_get_uint64(xdict, name), \
+	double: *((double *)&target) = xpc_dictionary_get_double(xdict, name), \
 	bool: *((bool *)&target) = xpc_dictionary_get_bool(xdict, name) \
 )
 

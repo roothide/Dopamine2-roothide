@@ -65,54 +65,21 @@
 
 - (NSArray *)getLatestReleases
 {
-    static NSLock* reqLock=nil;
-    static NSArray *releases=nil;
     static dispatch_once_t onceToken;
+    static NSArray *releases;
     dispatch_once(&onceToken, ^{
-        reqLock = [NSLock new];
-    });
-    
-    [reqLock lock];
-    
-    if(!releases) {
-        
-        NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/roothide/Dopamine2-roothide/tags"];
+        NSURL *url = [NSURL URLWithString:@"https://api.github.com/repos/roothide/Dopamine2-roothide/releases"];
         NSData *data = [NSData dataWithContentsOfURL:url];
-        if (!data) {
-            return nil;
+        if (data) {
+            NSError *error;
+            releases = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+            if (error)
+            {
+                onceToken = 0;
+                releases = @[];
+            }
         }
-        
-        NSError *error=nil;
-        NSArray* tags = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-        if (error) {
-            return nil;
-        }
-        
-        if(!tags || tags.count==0) {
-            return nil;
-        }
-        
-        NSData* data2 = [NSData dataWithContentsOfURL:[NSURL URLWithString:tags[0][@"commit"][@"url"]]];
-        if(!data2) {
-            return nil;
-        }
-        
-        NSError *error2=nil;
-        NSDictionary* commit = [NSJSONSerialization JSONObjectWithData:data2 options:kNilOptions error:&error2];
-        if(error2) {
-            return nil;
-        }
-        
-        NSMutableDictionary* newcommit = [tags[0] mutableCopy];
-        newcommit[@"tag_name"] = tags[0][@"name"];
-        newcommit[@"body"] = commit[@"commit"][@"message"];
-        newcommit[@"assets"] = @[@{@"browser_download_url":@"https://github.com/roothide/Dopamine2-roothide"}];
-        releases = @[newcommit.copy];
-        
-    }
-    
-    [reqLock unlock];
-    
+    });
     return releases;
 }
 
@@ -157,7 +124,7 @@
 
 - (NSString*)getLaunchedReleaseTag
 {
-    return [DOEnvironmentManager.sharedManager nightlyHash];
+    return [[[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"] componentsSeparatedByString:@"."] lastObject];
 }
 
 - (NSArray*)availablePackageManagers
@@ -237,8 +204,6 @@
 
 - (void)sendLog:(NSString*)log debug:(BOOL)debug update:(BOOL)update
 {
-    // NSLog(@"sendLog: %@", log);
-    
     if (!self.logView || !log)
         return;
 

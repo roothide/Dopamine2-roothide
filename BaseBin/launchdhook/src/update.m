@@ -2,13 +2,15 @@
 #include <libjailbreak/util.h>
 #include <libjailbreak/trustcache.h>
 #include <libjailbreak/kcall_arm64.h>
+#include <libjailbreak/signatures.h>
+#include <libjailbreak/basebin_gen.h>
 #include <xpc/xpc.h>
 #include <dlfcn.h>
-#include <sys/mount.h>
 
 #import <Foundation/Foundation.h>
 
-void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
+//void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
+#define abort_with_reason(reason_namespace,reason_code,reason_string,reason_flags)  launchd_panic("%s",reason_string)
 
 int jbupdate_basebin(const char *basebinTarPath)
 {
@@ -16,7 +18,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 		int r = 0;
 		if (access(basebinTarPath, F_OK) != 0) return 1;
 
-		NSString *prevVersion = [NSString stringWithContentsOfFile:NSJBRootPath(@"/basebin/.version") encoding:NSUTF8StringEncoding error:nil] ?: @"2.0";
+		NSString *prevVersion = [NSString stringWithContentsOfFile:JBROOT_PATH(@"/basebin/.version") encoding:NSUTF8StringEncoding error:nil] ?: @"2.0";
 
 		// Extract basebin tar
 		NSString *tmpExtractionPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[NSUUID UUID].UUIDString];
@@ -30,6 +32,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 		// Update basebin trustcache
 		NSString *trustcachePath = [tmpBasebinPath stringByAppendingPathComponent:@"basebin.tc"];
 		if (![[NSFileManager defaultManager] fileExistsAtPath:trustcachePath]) return 3;
+/*
 		trustcache_file_v1 *basebinTcFile = NULL;
 		if (trustcache_file_build_from_path(trustcachePath.fileSystemRepresentation, &basebinTcFile) != 0) {
 			[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
@@ -37,6 +40,11 @@ int jbupdate_basebin(const char *basebinTarPath)
 		}
 		r = trustcache_file_upload_with_uuid(basebinTcFile, BASEBIN_TRUSTCACHE_UUID);
 		free(basebinTcFile);
+*/
+/********************************* roothide specfic ********************/
+		r = randomizeAndLoadBasebinTrustcache(tmpBasebinPath.fileSystemRepresentation);
+/********************************* roothide specfic ********************/
+
 		if (r != 0) {
 			[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
 			return 5;
@@ -49,7 +57,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 		NSArray *newBasebinContents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:tmpBasebinPath error:nil];
 		for (NSString *basebinItem in newBasebinContents) {
 			NSString *newBasebinPath = [tmpBasebinPath stringByAppendingPathComponent:basebinItem];
-			NSString *oldBasebinPath = [NSJBRootPath(@"/basebin") stringByAppendingPathComponent:basebinItem];
+			NSString *oldBasebinPath = [JBROOT_PATH(@"/basebin") stringByAppendingPathComponent:basebinItem];
 			if ([[NSFileManager defaultManager] fileExistsAtPath:oldBasebinPath]) {
 				[[NSFileManager defaultManager] removeItemAtPath:oldBasebinPath error:nil];
 			}
@@ -57,13 +65,8 @@ int jbupdate_basebin(const char *basebinTarPath)
 		}
 		[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
 
-		// Update systemhook in fakelib
-		NSString* systemhookFilePath = [NSString stringWithFormat:@"%@/systemhook-%016llX.dylib", NSJBRootPath(@"/basebin"), jbinfo(jbrand)];
-		[[NSFileManager defaultManager] removeItemAtPath:systemhookFilePath error:nil];
-		[[NSFileManager defaultManager] copyItemAtPath:NSJBRootPath(@"/basebin/systemhook.dylib") toPath:systemhookFilePath error:nil];
-
 		// Patch basebin plists
-		NSURL *basebinDaemonsURL = [NSURL fileURLWithPath:NSJBRootPath(@"/basebin/LaunchDaemons")];
+		NSURL *basebinDaemonsURL = [NSURL fileURLWithPath:JBROOT_PATH(@"/basebin/LaunchDaemons")];
 		for (NSURL *basebinDaemonURL in [[NSFileManager defaultManager] contentsOfDirectoryAtURL:basebinDaemonsURL includingPropertiesForKeys:nil options:0 error:nil]) {
 			NSString *plistPath = basebinDaemonURL.path;
 			NSMutableDictionary *plistDict = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
@@ -72,7 +75,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 				NSMutableArray *programArguments = ((NSArray *)plistDict[@"ProgramArguments"]).mutableCopy;
 				for (NSString *argument in [programArguments reverseObjectEnumerator]) {
 					if ([argument containsString:@"@JBROOT@"]) {
-						programArguments[[programArguments indexOfObject:argument]] = [argument stringByReplacingOccurrencesOfString:@"@JBROOT@" withString:NSJBRootPath(@"/")];
+						programArguments[[programArguments indexOfObject:argument]] = [argument stringByReplacingOccurrencesOfString:@"@JBROOT@" withString:JBROOT_PATH(@"/")];
 						madeChanges = YES;
 					}
 				}
@@ -83,7 +86,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 			}
 		}
 
-		NSString *newVersion = [NSString stringWithContentsOfFile:NSJBRootPath(@"/basebin/.version") encoding:NSUTF8StringEncoding error:nil];
+		NSString *newVersion = [NSString stringWithContentsOfFile:JBROOT_PATH(@"/basebin/.version") encoding:NSUTF8StringEncoding error:nil];
 		if (!newVersion) return 6;
 
 		setenv("JBUPDATE_PREV_VERSION", prevVersion.UTF8String, 1);
@@ -109,18 +112,14 @@ void jbupdate_update_system_info(void)
 		void (*xpf_stop)(void) = dlsym(xpfHandle, "xpf_stop");
 		xpc_object_t (*xpf_construct_offset_dictionary)(const char *sets[]) = dlsym(xpfHandle, "xpf_construct_offset_dictionary");
 
-		// XXX: this is also a hack
-		struct statfs fst={0};
-		statfs("/usr/standalone/firmware", &fst);
-		char kernelPath[PATH_MAX];
-		snprintf(kernelPath,sizeof(kernelPath),"%s/../../../System/Library/Caches/com.apple.kernelcaches/kernelcache", fst.f_mntfromname);
-		xpc_object_t systemInfoXdict = NULL;
+		const char *kernelPath = prebootUUIDPath("/System/Library/Caches/com.apple.kernelcaches/kernelcache");
+		xpc_object_t newSystemInfoXdict = NULL;
 
 		// Rerun patchfinder
 		int r = xpf_start_with_kernel_path(kernelPath);
 		const char *error = NULL;
 		if (r == 0) {
-			char *sets[] = {
+			char *sets[99] = {
 				"translation",
 				"trustcache",
 				"sandbox",
@@ -128,14 +127,13 @@ void jbupdate_update_system_info(void)
 				"struct",
 				"physrw",
 				"perfkrw",
-                "namecache",
 				NULL,
 				NULL,
 				NULL,
 				NULL,	
 			};
 
-			uint32_t idx = 8;
+			uint32_t idx = 7;
 			if (xpf_set_is_supported("devmode")) {
 				sets[idx++] = "devmode"; 
 			}
@@ -146,8 +144,20 @@ void jbupdate_update_system_info(void)
 				sets[idx++] = "arm64kcall"; 
 			}
 
-			systemInfoXdict = xpf_construct_offset_dictionary((const char **)sets);
-			if (!systemInfoXdict) {
+
+/********************** roothide *************************/
+sets[idx++] = "namecache";
+
+if (xpf_set_is_supported("amfi_oids")) {
+	sets[idx++] = "amfi_oids";
+}
+
+sets[idx] = NULL;
+/********************** roothide *************************/
+
+
+			newSystemInfoXdict = xpf_construct_offset_dictionary((const char **)sets);
+			if (!newSystemInfoXdict) {
 				error = xpf_get_error();
 			}
 			xpf_stop();
@@ -166,17 +176,12 @@ void jbupdate_update_system_info(void)
 
 		dlclose(xpfHandle);
 
-		// Get stuff that won't change from current info
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.staticBase", kconstant(staticBase));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.slide", kconstant(slide));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.base", kconstant(base));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.virtBase", kconstant(virtBase));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.physBase", kconstant(physBase));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.physSize", kconstant(physSize));
-		xpc_dictionary_set_uint64(systemInfoXdict, "kernelConstant.cpuTTEP", kconstant(cpuTTEP));
-		xpc_dictionary_set_uint64(systemInfoXdict, "jailbreakInfo.usesPACBypass", jbinfo(usesPACBypass));
-		xpc_dictionary_set_string(systemInfoXdict, "jailbreakInfo.rootPath", jbinfo(rootPath));
-		xpc_dictionary_set_uint64(systemInfoXdict, "jailbreakInfo.jbrand", jbinfo(jbrand));
+		// Get old info and merge new info into it
+		xpc_object_t systemInfoXdict = jbinfo_get_serialized();
+		xpc_dictionary_apply(newSystemInfoXdict, ^_Bool(const char *key, xpc_object_t xobj) {
+			xpc_dictionary_set_value(systemInfoXdict, key, xobj);
+			return true;
+		});
 
 		// Rebuild gSystemInfo
 		jbinfo_initialize_dynamic_offsets(systemInfoXdict);
@@ -195,9 +200,18 @@ void jbupdate_finalize_stage2(const char *prevVersion, const char *newVersion)
 {
 	jbupdate_update_system_info();
 
+	if (strcmp(prevVersion, "2.4") < 0 && strcmp(newVersion, "2.4") >= 0) {
+		// On Dopamine <= 2.3, dyld used to be a file on the fakelib mount
+		// Due to that, the fakelib mount cannot be unmounted, or else the system will panic
+		// Additionally it cannot be modified because bind mounts are weird and won't update correctly
+		// In >= 2.4 dyld is a symlink to elsewhere, which allows it to be updated and the bind mount to be unmounted
+		// But if we're coming from <= 2.3, we have no option other than to reboot the device
+		reboot(0);
+	}
+
 	// Legacy, this file is no longer used
-	if (!access(JBRootPath("/basebin/.idownloadd_enabled"), F_OK)) {
-		remove(JBRootPath("/basebin/.idownloadd_enabled"));
+	if (!access(JBROOT_PATH("/basebin/.idownloadd_enabled"), F_OK)) {
+		remove(JBROOT_PATH("/basebin/.idownloadd_enabled"));
 	}
 
 	if (strcmp(prevVersion, "2.1") < 0 && strcmp(newVersion, "2.1") >= 0) {
@@ -209,6 +223,44 @@ void jbupdate_finalize_stage2(const char *prevVersion, const char *newVersion)
 		// Initialize kcall only after we have the offsets required for it
 		arm64_kcall_init();
 #endif
+	}
+
+	// Update patched dyld
+	int r = basebin_generate(YES);
+	if (r != 0) {
+		char msg[4000];
+		snprintf(msg, 4000, "Dopamine: Updating patched dyld failed with error %d, cannot continue.", r);
+		abort_with_reason(7, 1, msg, 0);
+	}
+
+	// Update dyld trustcache
+	cdhash_t *cdhashes = NULL;
+	uint32_t cdhashesCount = 0;
+	file_collect_untrusted_cdhashes_by_path(JBROOT_PATH("/basebin/.fakelib/dyld"), &cdhashes, &cdhashesCount);
+
+	if (cdhashesCount > 1) {
+		char msg[4000];
+		snprintf(msg, 4000, "Dopamine: Updating patched dyld failed due to unexpected amount of cdhashes (%d), cannot continue.", cdhashesCount);
+		abort_with_reason(7, 1, msg, 0);
+	}
+	else if (cdhashesCount == 1) {
+		trustcache_file_v1 *dyldTCFile = NULL;
+		r = trustcache_file_build_from_cdhashes(cdhashes, cdhashesCount, &dyldTCFile);
+		free(cdhashes);
+		if (r != 0) {
+			char msg[4000];
+			snprintf(msg, 4000, "Dopamine: Building dyld trustcache failed with error %d, cannot continue.", r);
+			abort_with_reason(7, 1, msg, 0);
+		}
+
+		r = trustcache_file_upload_with_uuid(dyldTCFile, DYLD_TRUSTCACHE_UUID);
+		if (r != 0) {
+			char msg[4000];
+			snprintf(msg, 4000, "Dopamine: Updating dyld trustcache failed with error %d, cannot continue.", r);
+			abort_with_reason(7, 1, msg, 0);
+		}
+
+		free(dyldTCFile);
 	}
 
 	JBFixMobilePermissions();

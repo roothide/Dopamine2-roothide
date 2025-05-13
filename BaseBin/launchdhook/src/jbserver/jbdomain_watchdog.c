@@ -5,6 +5,8 @@
 #include <libjailbreak/util.h>
 #include "../crashreporter.h"
 
+#include <libjailbreak/roothider.h>
+
 static bool watchdog_domain_allowed(audit_token_t clientToken)
 {
 	xpc_object_t entitlementValue = xpc_copy_entitlement_for_token("com.apple.private.iowatchdog.user-access", &clientToken);
@@ -24,7 +26,7 @@ static int watchdog_intercept_userspace_panic(const char *panicMessage)
 	}
 
 	setenv("WATCHDOG_PANIC_MESSAGE", panicMessage, 1);
-	FILE *touchFile = fopen(JBRootPath("/var/.safe_mode"), "w");
+	FILE *touchFile = fopen(JBROOT_PATH("/basebin/.safe_mode"), "w");
 	fclose(touchFile);
 
 	return 0;

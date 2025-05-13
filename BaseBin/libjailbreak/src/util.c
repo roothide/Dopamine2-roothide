@@ -3,18 +3,24 @@
 #include "info.h"
 #include "kernel.h"
 #include "translation.h"
-#include "libproc.h"
-#include "libproc_private.h"
 #include <spawn.h>
 #include <mach/mach_time.h>
 #include <pthread.h>
 #include <signal.h>
+#include <dlfcn.h>
 #include <sys/sysctl.h>
 #include <archive.h>
 #include <archive_entry.h>
 #include <math.h>
+#include <mach-o/dyld.h>
+#include <dirent.h>
 #include <IOKit/IOKitLib.h>
+#include <mach-o/dyld_images.h>
+#include <mach-o/getsect.h>
+#include <dyld_cache_format.h>
 extern char **environ;
+
+#include "roothider.h"
 
 #define FAKE_PHYSPAGE_TO_MAP 0x13370000
 
@@ -22,6 +28,19 @@ extern char **environ;
 extern int posix_spawnattr_set_persona_np(const posix_spawnattr_t* __restrict, uid_t, uint32_t);
 extern int posix_spawnattr_set_persona_uid_np(const posix_spawnattr_t* __restrict, uid_t);
 extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t* __restrict, uid_t);
+int posix_spawnattr_set_registered_ports_np(posix_spawnattr_t * __restrict attr, mach_port_t portarray[], uint32_t count);
+
+const struct mach_header *get_mach_header(const char *name)
+{
+	const struct mach_header *mh = NULL;
+	for (int i = 0; i < _dyld_image_count(); i++) {
+		if (!strcmp(_dyld_get_image_name(i), name)) {
+			mh = _dyld_get_image_header(i);
+			break;
+		}
+	}
+	return mh;
+}
 
 void proc_iterate(void (^itBlock)(uint64_t, bool*))
 {
@@ -74,34 +93,6 @@ uint64_t pmap_self(void)
 		gSelfPmap = kread_ptr(vm_map_self() + koffsetof(vm_map, pmap));
 	});
 	return gSelfPmap;
-}
-
-pid_t proc_get_ppid(pid_t pid)
-{
-    struct proc_bsdinfo procInfo;
-    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo)) <= 0) {
-        return -1;
-    }
-    return procInfo.pbi_ppid;
-}
-
-int proc_paused(pid_t pid, bool* paused)
-{
-    *paused = false;
-
-    struct proc_bsdinfo procInfo = {0};
-    int ret = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo));
-    if (ret != sizeof(procInfo)) {
-        return -1;
-    }
-
-    if (procInfo.pbi_status == SSTOP) {
-        *paused = true;
-    } else if (procInfo.pbi_status != SRUN) {
-        return -1;
-    }
-
-    return 0;
 }
 
 uint64_t ttep_self(void)
@@ -487,9 +478,9 @@ uint64_t kpacda(uint64_t pointer, uint64_t modifier)
 {
 	if (gPrimitives.kexec && kgadget(pacda)) {
 		// |------- GADGET -------|
-		// | cmp x1, #0		      |
+		// | cmp x1, #0		      |
 		// | pacda x1, x9         |
-		// | str x9, [x8]         |
+		// | str x9, [x8]         |
 		// | csel x9, xzr, x1, eq |
 		// | ret                  |
 		// |----------------------|
@@ -552,6 +543,26 @@ void proc_allow_all_syscalls(uint64_t proc)
 	}
 }
 
+void proc_remove_msg_filter(uint64_t proc)
+{
+	if (__builtin_available(iOS 16.0, *)) {
+		#define TFRO_FILTER_MSG                 0x00004000
+
+		if (koffsetof(proc_ro, t_flags_ro)) {
+			// iOS 16.1+
+			uint64_t proc_ro = kread_ptr(proc + koffsetof(proc, proc_ro));
+			uint32_t t_flags = kread32(proc_ro + koffsetof(proc_ro, t_flags_ro));
+			kwrite32(proc_ro + koffsetof(proc_ro, t_flags_ro), t_flags & ~TFRO_FILTER_MSG);
+		}
+		else if (koffsetof(task, flags)) {
+			// iOS 16.0.x
+			uint64_t task = proc_task(proc);
+			uint32_t t_flags = kread32(task + koffsetof(task, flags));
+			kwrite32(task + koffsetof(task, flags), t_flags & ~TFRO_FILTER_MSG);
+		}
+	}
+}
+
 int cmd_wait_for_exit(pid_t pid)
 {
 	int status = 0;
@@ -563,7 +574,7 @@ int cmd_wait_for_exit(pid_t pid)
 	return status;
 }
 
-int __exec_cmd_internal_va(bool suspended, bool root, bool waitForExit, pid_t *pidOut, const char *binary, int argc, va_list va_args)
+int __exec_cmd_internal_va(bool suspended, bool root, bool waitForExit, pid_t *pidOut, const char *binary, int argc, va_list va_args, char **envp)
 {
 	const char *argv[argc+1];
 	argv[0] = binary;
@@ -574,24 +585,27 @@ int __exec_cmd_internal_va(bool suspended, bool root, bool waitForExit, pid_t *p
 
 	posix_spawnattr_t attr = NULL;
 	posix_spawnattr_init(&attr);
-	// if (suspended) {
+	if (suspended) {
 		posix_spawnattr_setflags(&attr, POSIX_SPAWN_START_SUSPENDED);
-	// }
+	}
 	if (root) {
 		posix_spawnattr_set_persona_np(&attr, 99, POSIX_SPAWN_PERSONA_FLAGS_OVERRIDE);
 		posix_spawnattr_set_persona_uid_np(&attr, 0);
 		posix_spawnattr_set_persona_gid_np(&attr, 0);
 	}
 
+	char **envToUse = envp;
+	if (!envToUse && getpid() != 1) {
+		// We NEVER want to pass launchd's environment to any process whatsoever
+		// This is because, amongst other things, it has DYLD_INSERT_LIBRARIES set to launchdhook which is NO good
+		envToUse = environ;
+	}
+
 	pid_t spawnedPid = 0;
-	int spawnError = posix_spawn(&spawnedPid, binary, NULL, &attr, (char *const *)argv, environ);
+	int spawnError = exec_cmd_roothide_spawn(&spawnedPid, binary, NULL, &attr, (char *const *)argv, envToUse);
 	if (attr) posix_spawnattr_destroy(&attr);
 	if (spawnError != 0) return spawnError;
 
-	jbclient_patch_spawn(spawnedPid, false);
-
-	if (!suspended) kill(spawnedPid, SIGCONT);
-	
 	if (waitForExit && !suspended) {
 		return cmd_wait_for_exit(spawnedPid);
 	}
@@ -610,7 +624,7 @@ int exec_cmd(const char *binary, ...)
 	va_end(args);
 
 	va_start(args, binary);
-	int r = __exec_cmd_internal_va(false, false, true, NULL, binary, argc, args);
+	int r = __exec_cmd_internal_va(false, false, true, NULL, binary, argc, args, NULL);
 	va_end(args);
 	return r;
 }
@@ -624,7 +638,7 @@ int exec_cmd_nowait(pid_t *pidOut, const char *binary, ...)
 	va_end(args);
 
 	va_start(args, binary);
-	int r = __exec_cmd_internal_va(false, false, false, pidOut, binary, argc, args);
+	int r = __exec_cmd_internal_va(false, false, false, pidOut, binary, argc, args, NULL);
 	va_end(args);
 	return r;
 }
@@ -638,7 +652,7 @@ int exec_cmd_suspended(pid_t *pidOut, const char *binary, ...)
 	va_end(args);
 
 	va_start(args, binary);
-	int r = __exec_cmd_internal_va(true, false, false, pidOut, binary, argc, args);
+	int r = __exec_cmd_internal_va(true, false, false, pidOut, binary, argc, args, NULL);
 	va_end(args);
 	return r;
 }
@@ -652,12 +666,54 @@ int exec_cmd_root(const char *binary, ...)
 	va_end(args);
 
 	va_start(args, binary);
-	int r = __exec_cmd_internal_va(false, true, true, NULL, binary, argc, args);
+	int r = __exec_cmd_internal_va(false, true, true, NULL, binary, argc, args, NULL);
 	va_end(args);
 	return r;
 }
 
-void killall(const char *executablePathToKill, bool softly)
+int exec_cmd_env(char **envp, const char *binary, ...)
+{
+	int argc = 1;
+	va_list args;
+	va_start(args, binary);
+	while (va_arg(args, const char *)) argc++;
+	va_end(args);
+
+	va_start(args, binary);
+	int r = __exec_cmd_internal_va(false, false, true, NULL, binary, argc, args, envp);
+	va_end(args);
+	return r;
+}
+
+int jbctl_earlyboot(mach_port_t earlyBootServer, ...)
+{
+	int argc = 2;
+	va_list args;
+	va_start(args, earlyBootServer);
+	while (va_arg(args, const char *)) argc++;
+	va_end(args);
+
+	const char *jbctlPath = JBROOT_PATH("/basebin/jbctl");
+	const char *argsArr[argc+1];
+	argsArr[0] = jbctlPath;
+	va_start(args, earlyBootServer);
+	for (int i = 1; i < argc-1; i++) {
+		argsArr[i] = va_arg(args, const char *);
+	}
+	argsArr[argc-1] = "earlyboot";
+	argsArr[argc] = NULL;
+
+	posix_spawnattr_t attr;
+	posix_spawnattr_init(&attr);
+	posix_spawnattr_set_registered_ports_np(&attr, (mach_port_t[]){earlyBootServer, MACH_PORT_NULL, MACH_PORT_NULL}, 3);
+	pid_t spawnedPid = 0;
+	int r = posix_spawn(&spawnedPid, jbctlPath, NULL, &attr, (char *const *)argsArr, NULL);
+	posix_spawnattr_destroy(&attr);
+	if (r != 0) return r;
+	return cmd_wait_for_exit(spawnedPid);
+}
+
+void killall(const char *executablePath, int signal)
 {
 	static int maxArgumentSize = 0;
 	if (maxArgumentSize == 0) {
@@ -689,16 +745,9 @@ void killall(const char *executablePathToKill, bool softly)
 		size_t size = maxArgumentSize;
 		char* buffer = (char *)malloc(length);
 		if (sysctl((int[]){ CTL_KERN, KERN_PROCARGS2, pid }, 3, buffer, &size, NULL, 0) == 0) {
-			char *executablePath = buffer + sizeof(int);
-			if (strcmp(executablePath, executablePathToKill) == 0) {
-				if(softly)
-				{
-					kill(pid, SIGTERM);
-				}
-				else
-				{
-					kill(pid, SIGKILL);
-				}
+			char *cExecutablePath = buffer + sizeof(int);
+			if (strcmp(cExecutablePath, executablePath) == 0) {
+				kill(pid, signal);
 			}
 		}
 		free(buffer);
@@ -884,4 +933,26 @@ int convert_hex_string_to_data(const char *string, void *outBuf)
 		if (shift == 0) pout++;
 	}
 	return 0;
+}
+
+char *boot_manifest_hash(void)
+{
+	static char *gBuf = NULL;
+	
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		io_registry_entry_t registryEntry = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/chosen");
+		if (registryEntry) {
+			CFDataRef bootManifestHashData = IORegistryEntryCreateCFProperty(registryEntry, CFSTR("boot-manifest-hash"), NULL, 0);
+			CFIndex bootManifestHashLength = CFDataGetLength(bootManifestHashData);
+
+			gBuf = malloc((bootManifestHashLength * 2 * sizeof(char)) + sizeof(char));
+			unsigned char *buf = (unsigned char *)CFDataGetBytePtr(bootManifestHashData);
+			convert_data_to_hex_string(buf, bootManifestHashLength, gBuf);
+
+			CFRelease(bootManifestHashData);
+		}
+	});
+
+	return gBuf;
 }
