@@ -1,6 +1,8 @@
 #ifndef SYSTEMHOOK_PRIVATE
 #define SYSTEMHOOK_PRIVATE
 
+#include <mach-o/dyld.h>
+
 #define SYS_ptrace 0x1A
 #define SYS_execve 0x3B
 #define SYS_posix_spawn 0xF4
@@ -59,5 +61,7 @@ struct _posix_spawn_args_desc {
 	size_t conclave_id_size;
 	char *conclave_id;
 };
+
+extern bool _dyld_get_image_uuid(const struct mach_header* mh, uuid_t uuid);
 
 #endif

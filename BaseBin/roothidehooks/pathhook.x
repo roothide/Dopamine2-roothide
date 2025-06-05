@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <substrate.h>
 #include <roothide.h>
+#include "common.h"
 
 #ifndef DEBUG
 #define NSLog(args...)	

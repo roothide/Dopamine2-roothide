@@ -6,6 +6,7 @@ basebin.tc
 libjailbreak/libjailbreak.dylib
 libjailbreak/libjailbreak.dylib.dSYM
 launchdhook/launchdhook.dylib
+dyldhook/dyldhook_merge.*.dylib
 systemhook/systemhook.dylib
 watchdoghook/watchdoghook.dylib
 forkfix/forkfix.dylib
@@ -13,3 +14,6 @@ forkfix/forkfix.dylib
 boomerang/boomerang
 jbctl/jbctl
 idownloadd/idownloadd
+jailbreakd/jailbreakd
+bootstrapper/bootstrapper
+jbupdate.sh

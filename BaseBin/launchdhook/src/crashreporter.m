@@ -1,3 +1,5 @@
+#if 0
+
 #include "crashreporter.h"
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
@@ -15,10 +17,7 @@
 #include <mach-o/dyld.h>
 extern CFStringRef CFCopySystemVersionString(void);
 
-#define RB_QUICK	0x400
-#define RB_PANIC	0x800
-int reboot_np(int howto, const char *message);
-#define abort_with_reason(reason_namespace,reason_code,reason_string,reason_flags)  reboot_np(RB_PANIC|RB_QUICK, reason_string)
+void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
 
 #import <Foundation/Foundation.h>
 
@@ -353,7 +352,6 @@ void crashreporter_catch_objc(NSException *e)
 	}
 }
 
-/*
 void *crashreporter_listen(void *arg)
 {
 	while (true) {
@@ -374,47 +372,11 @@ void *crashreporter_listen(void *arg)
 		mach_msg(&reply.header, MACH_SEND_MSG | MACH_MSG_OPTION_NONE, reply.header.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
 	}
 }
-*/
-void *crashreporter_listen(void *arg)
-{
-    int bufsize = 4096;
-    mach_msg_header_t* msg = (mach_msg_header_t*)malloc(bufsize);
-    
-	while (true) {
-        
-        memset(msg, 0, bufsize);
-        msg->msgh_size = bufsize;
-        mach_msg_return_t ret = mach_msg(msg, MACH_RCV_MSG|MACH_RCV_LARGE, 0, msg->msgh_size, gExceptionPort, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-        
-        if(ret == MACH_RCV_TOO_LARGE) {
-            char buf[255];
-            snprintf(buf,sizeof(buf),"msg too large: %x", msg->msgh_size);
-            abort_with_reason(7, 1, buf, 0);
-        }
-        
-        if(ret != MACH_MSG_SUCCESS) {
-            char buf[255];
-            snprintf(buf,sizeof(buf),"recv mach msg failed: %x", ret);
-            abort_with_reason(7, 1, buf, 0);
-        }
-
-		exception_raise_reply reply;
-		crashreporter_catch_mach((exception_raise_request *)msg, &reply);
-
-		reply.header.msgh_bits = MACH_MSGH_BITS(MACH_MSGH_BITS_REMOTE(msg->msgh_bits), 0);
-		reply.header.msgh_size = sizeof(exception_raise_reply);
-		reply.header.msgh_remote_port = msg->msgh_remote_port;
-		reply.header.msgh_local_port = MACH_PORT_NULL;
-		reply.header.msgh_id = msg->msgh_id + 0x64;
-
-		mach_msg(&reply.header, MACH_SEND_MSG | MACH_MSG_OPTION_NONE, reply.header.msgh_size, 0, MACH_PORT_NULL, MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-	}
-}
 
 void crashreporter_pause(void)
 {
 	if (gCrashReporterState == kCrashReporterStateActive) {
-		task_set_exception_ports(mach_task_self_, EXC_MASK_CRASH_RELATED, MACH_PORT_NULL, 0, 0);
+		task_set_exception_ports(mach_task_self_, EXC_MASK_CRASH_RELATED, 0, EXCEPTION_DEFAULT, ARM_THREAD_STATE64);
 		NSSetUncaughtExceptionHandler(defaultNSExceptionHandler);
 		defaultNSExceptionHandler = nil;
 		gCrashReporterState = kCrashReporterStatePaused;
@@ -431,87 +393,8 @@ void crashreporter_resume(void)
 	}
 }
 
-
-#include <execinfo.h>
-void signal_handler(int signo, siginfo_t *info, void *context)
-{
-    char *name = NULL;
-    FILE *f = crashreporter_open_outfile("launchd", &name);
-    if (f) {
-        
-        ucontext_t* ucontext = (ucontext_t*)context;
-        fprintf(f, "Signal %s(%d/%d), errno=%d, code=%d, status=%d, addr=%p, value=%p, band=%lx\n\n", strsignal(signo), signo, info->si_signo,
-               info->si_errno, info->si_code, info->si_status, info->si_addr, info->si_value.sival_ptr, info->si_band);
-        
-        fprintf(f, "Register State:\n");
-        for(int i = 0; i <= 28; i++) {
-            if (i < 10) {
-                fprintf(f, " ");
-            }
-            fprintf(f, " x%d = 0x%016llX", i, ucontext->uc_mcontext->__ss.__x[i]);
-            if ((i+1) % (6+1) == 0) {
-                fprintf(f, "\n");
-            }
-            else {
-                fprintf(f, ", ");
-            }
-        }
-
-        fprintf(f, "  lr = 0x%016llX,   pc = 0x%016llX,   sp = 0x%016llX,   fp = 0x%016llX, cpsr = 0x%08X\n far = 0x%016llX,  esr = 0x%08X\n\n",
-                __darwin_arm_thread_state64_get_lr(ucontext->uc_mcontext->__ss),
-                __darwin_arm_thread_state64_get_pc(ucontext->uc_mcontext->__ss),
-                __darwin_arm_thread_state64_get_sp(ucontext->uc_mcontext->__ss),
-                __darwin_arm_thread_state64_get_fp(ucontext->uc_mcontext->__ss),
-                ucontext->uc_mcontext->__ss.__cpsr,
-                ucontext->uc_mcontext->__es.__far,
-                ucontext->uc_mcontext->__es.__esr);
-
-        void *callstacks[30];
-        int nptrs = backtrace(callstacks, sizeof(callstacks)/sizeof(callstacks[0]));
-
-        printf("Stack trace:\n");
-        char** symbols = backtrace_symbols(callstacks, nptrs);
-        
-        if(symbols != NULL) {
-            for(int i = 0; i < nptrs; i++) {
-                fprintf(f, "%p\t%s\n", callstacks[i], symbols[i]);
-            }
-            free(symbols);
-        } else {
-            printf("no backtrace captured\n");
-            return;
-        }
-        
-        crashreporter_save_outfile(f);
-    }
-    
-    char msg[255];
-    snprintf(msg, sizeof(msg), "Unexcept signal %d, A detailed report has been written to the file %s.", signo, name);
-    abort_with_reason(7, 1, msg, 0);
-}
-
-int sigcatch[] = {
-//SIGQUIT, //->SIG_IGN by launchd in main()
-   SIGILL,
-   SIGTRAP,
-   SIGABRT,
-   SIGEMT,
-   SIGFPE,
-   SIGBUS,
-   SIGSEGV,
-   SIGSYS
-//others ->->SIG_IGN by launchd in main()
-};
-
 void crashreporter_start(void)
 {
-	for(int i=0; i<sizeof(sigcatch)/sizeof(sigcatch[0]); i++) {
-		struct sigaction act = {0};
-		act.sa_flags = SA_SIGINFO|SA_RESETHAND;
-		act.sa_sigaction = signal_handler;
-		sigaction(sigcatch[i], &act, NULL);
-	}
-
 	if (gCrashReporterState == kCrashReporterStateNotActive) {
 		mach_port_allocate(mach_task_self_, MACH_PORT_RIGHT_RECEIVE, &gExceptionPort);
 		mach_port_insert_right(mach_task_self_, gExceptionPort, gExceptionPort, MACH_MSG_TYPE_MAKE_SEND);
@@ -521,3 +404,5 @@ void crashreporter_start(void)
 	}
 }
 
+
+#endif

@@ -61,33 +61,6 @@ void jbinfo_initialize_hardcoded_offsets(void)
 	// filedesc
 	gSystemInfo.kernelStruct.filedesc.ofiles_start = 0x20;
 
-    // file
-    gSystemInfo.kernelStruct.fileproc.fileglob = 0x10;
-    gSystemInfo.kernelStruct.fileglob.vnode = 0x38;
-
-    // file
-    gSystemInfo.kernelStruct.fileproc.fileglob = 0x10;
-    gSystemInfo.kernelStruct.fileglob.vnode = 0x38;
-
-    // vnode
-    gSystemInfo.kernelStruct.vnode.id = 0x74;
-    gSystemInfo.kernelStruct.vnode.usecount = 0x60;
-    gSystemInfo.kernelStruct.vnode.ncchildren.tqh_first = 0x30;
-    gSystemInfo.kernelStruct.vnode.ncchildren.tqh_last = 0x38;
-    gSystemInfo.kernelStruct.vnode.parent = 0xc0;
-    gSystemInfo.kernelStruct.vnode.nclinks.lh_first = 0x40;
-
-    // namecache
-    gSystemInfo.kernelStruct.namecache.smr = false;
-    gSystemInfo.kernelStruct.namecache.child.tqe_next = 0x10;
-    gSystemInfo.kernelStruct.namecache.child.tqe_prev = 0x18;
-    gSystemInfo.kernelStruct.namecache.hash.le_next = 0x30;
-    gSystemInfo.kernelStruct.namecache.hash.le_prev = 0x38;
-    gSystemInfo.kernelStruct.namecache.dvp = 0x40;
-    gSystemInfo.kernelStruct.namecache.vp = 0x48;
-    gSystemInfo.kernelStruct.namecache.hashval = 0x50;
-    gSystemInfo.kernelStruct.namecache.name = 0x58;
-
 	// task
 	gSystemInfo.kernelStruct.task.map     = 0x28;
 	gSystemInfo.kernelStruct.task.threads = 0x60;
@@ -237,8 +210,10 @@ void jbinfo_initialize_hardcoded_offsets(void)
 					// task
 #ifdef __arm64e__
 					gSystemInfo.kernelStruct.task.task_can_transfer_memory_ownership = 0x548 + taskJitboxAdjust;
+					gSystemInfo.kernelStruct.task.flags = 0x3b8 + taskJitboxAdjust;
 #else
 					gSystemInfo.kernelStruct.task.task_can_transfer_memory_ownership = 0x528;
+					gSystemInfo.kernelStruct.task.flags = 0x3a0;
 #endif
 					// vm_map
 					gSystemInfo.kernelStruct.vm_map.flags = 0xB4;
@@ -269,16 +244,13 @@ void jbinfo_initialize_hardcoded_offsets(void)
 
 					if (strcmp(xnuVersion, "22.1.0") >= 0) { // iOS 16.1+
 						gSystemInfo.kernelStruct.ipc_space.table_uses_smr = true;
+
+						// proc_ro
+						gSystemInfo.kernelStruct.proc_ro.t_flags_ro = 0x78;
+
 						if (strcmp(xnuVersion, "22.3.0") >= 0) { // iOS 16.3+
 							gSystemInfo.kernelConstant.smrBase = 2;
 							if (strcmp(xnuVersion, "22.4.0") >= 0) { // iOS 16.4+
-                                // namecache
-                                gSystemInfo.kernelStruct.namecache.smr = true;
-                                gSystemInfo.kernelStruct.namecache.dvp = 0x48;
-                                gSystemInfo.kernelStruct.namecache.vp = 0x50;
-                                gSystemInfo.kernelStruct.namecache.hashval = 0x58;
-                                gSystemInfo.kernelStruct.namecache.name = 0x60;
-
 								// proc
 								gSystemInfo.kernelStruct.proc.flag   = 0x454;
 								gSystemInfo.kernelStruct.proc.textvp = 0x548;

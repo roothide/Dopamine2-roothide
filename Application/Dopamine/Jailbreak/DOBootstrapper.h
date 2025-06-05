@@ -7,18 +7,6 @@
 
 #import <Foundation/Foundation.h>
 
-uint64_t jbrand();
-
-uint64_t jbrand_new();
-
-NSString* find_jbroot(BOOL force);
-
-NSString* jbroot(NSString *path);
-
-int is_jbroot_name(const char* name);
-
-NSString* rootfsPrefix(NSString* path);
-
 NS_ASSUME_NONNULL_BEGIN
 
 @interface DOBootstrapper : NSObject <NSURLSessionDelegate, NSURLSessionDownloadDelegate>

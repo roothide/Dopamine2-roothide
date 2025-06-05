@@ -3,7 +3,7 @@
 #include <libjailbreak/info.h>
 #include <sandbox.h>
 #include <libproc.h>
-#include <libproc_private.h>
+#include <sys/proc_info.h>
 
 #include <libjailbreak/signatures.h>
 #include <libjailbreak/trustcache.h>
@@ -12,10 +12,20 @@
 #include <libjailbreak/primitives.h>
 #include <libjailbreak/codesign.h>
 
+#include <signal.h>
+#include <libjailbreak/roothider.h>
+
+/*
+bool gSystemwideDomainEnabled = true;
+void systemwide_domain_set_enabled(bool enabled)
+{
+	gSystemwideDomainEnabled = enabled;
+}
+*/
+
 extern bool string_has_prefix(const char *str, const char* prefix);
 extern bool string_has_suffix(const char* str, const char* suffix);
 
-/*
 char *combine_strings(char separator, char **components, int count)
 {
 	if (count <= 0) return NULL;
@@ -50,61 +60,31 @@ char *combine_strings(char separator, char **components, int count)
 
 	return outString;
 }
-*/
 
-#include <signal.h>
-#include "exec_patch.h"
-#include "libjailbreak/log.h"
-
-extern bool gFirstLoad;
-
-bool is_sub_path(const char* parent, const char* child)
+/*
+bool systemwide_domain_allowed(audit_token_t clientToken)
 {
-	char real_child[PATH_MAX]={0};
-	char real_parent[PATH_MAX]={0};
+	if (!gSystemwideDomainEnabled) {
+		// While the jailbreak is hidden, we need to disable the systemwide domain
+		pid_t pid = audit_token_to_pid(clientToken);
+		char procPath[4*MAXPATHLEN];
+		if (proc_pidpath(pid, procPath, sizeof(procPath)) <= 0) {
+			return false;
+		}
 
-	if(!realpath(child, real_child)) return false;
-	if(!realpath(parent, real_parent)) return false;
+		if (string_has_suffix(procPath, "/Dopamine.app/Dopamine")) {
+			// We still want it to be accessible by Dopamine itself though
+			// Unfortunately, there is not really a better check here since
+			// - Dopamine can be sideloaded, so no control over entitlements
+			// - App identifier could be changed by whoever installed it aswell
+			return true;
+		}
 
-	if(!string_has_prefix(real_child, real_parent))
 		return false;
-
-	return real_child[strlen(real_parent)] == '/';
-}
-
-char* generate_sandbox_extensions(audit_token_t *processToken, bool writable)
-{
-    char* sandboxExtensionsOut=NULL;
-    char jbrootbase[PATH_MAX];
-    char jbrootsecondary[PATH_MAX];
-    snprintf(jbrootbase, sizeof(jbrootbase), "/private/var/containers/Bundle/Application/.jbroot-%016llX/", jbinfo(jbrand));
-    snprintf(jbrootsecondary, sizeof(jbrootsecondary), "/private/var/mobile/Containers/Shared/AppGroup/.jbroot-%016llX/", jbinfo(jbrand));
-
-    char* fileclass = writable ? "com.apple.app-sandbox.read-write" : "com.apple.app-sandbox.read";
-
-    char *readExtension = sandbox_extension_issue_file_to_process("com.apple.app-sandbox.read", jbrootbase, 0, *processToken);
-    char *execExtension = sandbox_extension_issue_file_to_process("com.apple.sandbox.executable", jbrootbase, 0, *processToken);
-    char *readExtension2 = sandbox_extension_issue_file_to_process(fileclass, jbrootsecondary, 0, *processToken);
-    if (readExtension && execExtension && readExtension2) {
-        char extensionBuf[strlen(readExtension) + 1 + strlen(execExtension) + strlen(readExtension2) + 1];
-        strcat(extensionBuf, readExtension);
-        strcat(extensionBuf, "|");
-        strcat(extensionBuf, execExtension);
-        strcat(extensionBuf, "|");
-        strcat(extensionBuf, readExtension2);
-        sandboxExtensionsOut = strdup(extensionBuf);
-    }
-    if (readExtension) free(readExtension);
-    if (execExtension) free(execExtension);
-    if (readExtension2) free(readExtension2);
-    return sandboxExtensionsOut;
-}
-/////////////////////////////////////////////////////////////////
-
-static bool systemwide_domain_allowed(audit_token_t clientToken)
-{
+	}
 	return true;
 }
+*/
 
 static int systemwide_get_jbroot(char **rootPathOut)
 {
@@ -119,62 +99,142 @@ static int systemwide_get_boot_uuid(char **bootUUIDOut)
 	return 0;
 }
 
-static int trust_file(const char *filePath, const char *dlopenCallerImagePath, const char *dlopenCallerExecutablePath, xpc_object_t preferredArchsArray)
+CS_SuperBlob *siginfo_resolve_superblob(struct siginfo *siginfo, int pid, int fd)
 {
-	// Shared logic between client and server, implemented in client
-	// This should essentially mean these files never reach us in the first place
-	// But you know, never trust the client :D
-	extern bool can_skip_trusting_file(const char *filePath, bool isLibrary, bool isClient);
+	if (!siginfo) return NULL;
+	if (siginfo->signature.fs_blob_size == 0) return NULL;
 
-	if (can_skip_trusting_file(filePath, (bool)dlopenCallerExecutablePath, false)) return -1;
+	size_t superblobSize = siginfo->signature.fs_blob_size;
+	CS_SuperBlob *superblob = malloc(superblobSize);
+	if (!superblob) return NULL;
 
-	size_t preferredArchCount = 0;
-	if (preferredArchsArray) preferredArchCount = xpc_array_get_count(preferredArchsArray);
-	uint32_t preferredArchTypes[preferredArchCount];
-	uint32_t preferredArchSubtypes[preferredArchCount];
-	for (size_t i = 0; i < preferredArchCount; i++) {
-		preferredArchTypes[i] = 0;
-		preferredArchSubtypes[i] = UINT32_MAX;
-		xpc_object_t arch = xpc_array_get_value(preferredArchsArray, i);
-		if (xpc_get_type(arch) == XPC_TYPE_DICTIONARY) {
-			preferredArchTypes[i] = xpc_dictionary_get_uint64(arch, "type");
-			preferredArchSubtypes[i] = xpc_dictionary_get_uint64(arch, "subtype");
+	bool success = false;
+
+	switch (siginfo->source) {
+		case SIGNATURE_SOURCE_FILE: {
+			uintptr_t superblobStart = siginfo->signature.fs_file_start + (uintptr_t)siginfo->signature.fs_blob_start;
+			uintptr_t superblobEnd   = superblobStart + superblobSize;
+			struct stat st = {};
+
+        	if (fstat(fd, &st) != 0) break;
+			if (superblobEnd > st.st_size) break;
+			if (lseek(fd, superblobStart, SEEK_SET) != superblobStart) break;
+			if (read(fd, superblob, superblobSize) != superblobSize) break;
+
+			success = true;
+		}
+		case SIGNATURE_SOURCE_PROC: {
+			uint64_t proc = proc_find(pid);
+
+			if (!proc) break;
+			if (proc_vreadbuf(proc, siginfo->signature.fs_blob_start, superblob, superblobSize) != 0) break;
+
+			success = true;
+		}
+	}
+
+	if (!success) {
+		free(superblob);
+		superblob = NULL;
+	}
+
+	return superblob;
+}
+
+int systemwide_trust_file(audit_token_t *processToken, int rfd, struct siginfo *siginfo, size_t siginfoSize)
+{
+	if (siginfo && siginfoSize != sizeof(struct siginfo)) return -1;
+
+	pid_t pid = -1;
+	int fd = -1;
+	if (!processToken) {
+		pid = 1;
+		fd = dup(rfd);
+	}
+	else {
+		pid = audit_token_to_pid(*processToken);
+		struct vnode_fdinfowithpath vnodeInfo;
+		int ok = proc_pidfdinfo(pid, rfd, PROC_PIDFDVNODEPATHINFO, &vnodeInfo, sizeof(vnodeInfo));
+		if (ok > 0) {
+			fd = open(vnodeInfo.pvip.vip_path, O_RDONLY);
+		}
+	}
+
+	if (fd < 0) return -1;
+
+	struct statfs fsb;
+	int fsr = fstatfs(fd, &fsb);
+	if (fsr == 0) {
+		// Anything on the rootfs or fakelib mount point can be ignored as it's guaranteed to already be in trustcache
+		if (!strcmp(fsb.f_mntonname, "/") /*|| !strcmp(fsb.f_mntonname, "/usr/lib")*/) {
+			close(fd);
+			return 0;
 		}
 	}
 
 	cdhash_t *cdhashes = NULL;
 	uint32_t cdhashesCount = 0;
-	macho_collect_untrusted_cdhashes(filePath, dlopenCallerImagePath, dlopenCallerExecutablePath, preferredArchTypes, preferredArchSubtypes, preferredArchCount, &cdhashes, &cdhashesCount);
+
+	if (siginfo) {
+		// If we were passed a siginfo, get the cdhash of the superblob from the siginfo
+		CS_SuperBlob *superblob = siginfo_resolve_superblob(siginfo, pid, fd);
+		if (superblob) {
+			cdhash_t cdhash;
+			if (code_signature_calculate_adhoc_cdhash(superblob, cdhash)) {
+				if (!is_cdhash_trustcached(cdhash)) {
+
+
+/******************************************* roothide specfic ****************************************/
+char filepath[PATH_MAX] = {0};
+if(fcntl(fd, F_GETPATH, filepath) != 0) {
+	JBLogError("Failed to get file path for fd %d", fd);
+} else {
+	if(ensure_randomized_cdhash_for_slice(filepath, siginfo->signature.fs_file_start, cdhash) != 0) {
+		JBLogDebug("Failed to ensure randomized cdhash for %s", filepath);
+	} else {
+/******************************************* roothide specfic ****************************************/
+
+
+					cdhashes = malloc(sizeof(cdhash_t));
+					cdhashesCount = 1;
+					memcpy(&cdhashes[0], &cdhash, sizeof(cdhash_t));
+
+
+/**********/
+	}
+}
+/********/
+
+
+				}
+			}
+			free(superblob);
+		}
+	}
+	else {
+		// If we weren't passed a siginfo, get cdhashes of all slices
+		file_collect_untrusted_cdhashes(fd, &cdhashes, &cdhashesCount);
+	}
+	
 	if (cdhashes && cdhashesCount > 0) {
 		jb_trustcache_add_cdhashes(cdhashes, cdhashesCount);
 		free(cdhashes);
 	}
+
+	close(fd);
 	return 0;
 }
 
-// Not static because launchd will directly call this from it's posix_spawn hook
-int systemwide_trust_binary(const char *binaryPath, xpc_object_t preferredArchsArray)
+int systemwide_trust_file_by_path(const char *path)
 {
-	return trust_file(binaryPath, NULL, NULL, preferredArchsArray);
+	int fd = open(path, O_RDONLY);
+	if (fd < 0) return -1;
+	int r = systemwide_trust_file(NULL, fd, NULL, 0);
+	close(fd);
+	return r;
 }
 
-static int systemwide_trust_library(audit_token_t *processToken, const char *libraryPath, const char *callerLibraryPath)
-{
-	// Fetch process info
-	pid_t pid = audit_token_to_pid(*processToken);
-	char callerPath[4*MAXPATHLEN];
-	if (proc_pidpath(pid, callerPath, sizeof(callerPath)) < 0) {
-		return -1;
-	}
-
-	// When trusting a library that's dlopened at runtime, we need to pass the caller path
-	// This is to support dlopen("@executable_path/whatever", RTLD_NOW) and stuff like that
-	// (Yes that is a thing >.<)
-	// Also we need to pass the path of the image that called dlopen due to @loader_path, sigh...
-	return trust_file(libraryPath, callerLibraryPath, callerPath, NULL);
-}
-
-static int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut, bool *fullyDebuggedOut)
+int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, char **bootUUIDOut, char **sandboxExtensionsOut, bool *fullyDebuggedOut)
 {
 	// Fetch process info
 	pid_t pid = audit_token_to_pid(*processToken);
@@ -213,22 +273,23 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 
 	bool fullyDebugged = false;
 	if (string_has_prefix(procPath, "/private/var/containers/Bundle/Application") || string_has_prefix(procPath, JBROOT_PATH("/Applications"))) {
-		// This is an app, enable CS_DEBUGGED based on user preference
-		if (jbsetting(markAppsAsDebugged)) {
-			fullyDebugged = true;
-		}
-	}
-	*fullyDebuggedOut = fullyDebugged;
-/*/
-	struct statfs fs;
-	bool isPlatformProcess = statfs(procPath, &fs)==0 && strcmp(fs.f_mntonname, "/private/var") != 0;
+*/
+
+/************************************ roothide specific ************************************************/
+	uint32_t csflags = 0;
+    csops(pid, CS_OPS_STATUS, &csflags, sizeof(csflags));
+	bool isPlatformProcess = (csflags & CS_PLATFORM_BINARY) != 0;
 
 	// Generate sandbox extensions for the requesting process
 	*sandboxExtensionsOut = generate_sandbox_extensions(processToken, isPlatformProcess);
+	if(!(*sandboxExtensionsOut)) {
+		JBLogError("Failed to generate sandbox extensions for process %d", pid);
+	}
 
 	bool fullyDebugged = false;
-	bool is_app_path(const char* path);
-	if (is_app_path(procPath) || is_sub_path(JBROOT_PATH("/Applications"), procPath)) {
+	if (isRemovableBundlePath(procPath) || isSubPathOf(JBROOT_PATH("/Applications"), procPath)) {
+/*************************************** roothide specific *********************************/
+		
 		// This is an app, enable CS_DEBUGGED based on user preference
 		if (jbsetting(markAppsAsDebugged)) {
 			fullyDebugged = true;
@@ -236,7 +297,6 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 	}
 	*fullyDebuggedOut = fullyDebugged;
 
-	
 	// Allow invalid pages
 	cs_allow_invalid(proc, fullyDebugged);
 
@@ -263,13 +323,17 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 		}
 	}
 
-	// In iOS 16+ there is a super annoying security feature called Protobox
-	// Amongst other things, it allows for a process to have a syscall mask
-	// If a process calls a syscall it's not allowed to call, it immediately crashes
-	// Because for tweaks and hooking this is unacceptable, we update these masks to be 1 for all syscalls on all processes
-	// That will at least get rid of the syscall mask part of Protobox
 	if (__builtin_available(iOS 16.0, *)) {
+		// In iOS 16+ there is a super annoying security feature called Protobox
+		// Amongst other things, it allows for a process to have a syscall mask
+		// If a process calls a syscall it's not allowed to call, it immediately crashes
+		// Because for tweaks and hooking this is unacceptable, we update these masks to be 1 for all syscalls on all processes
+		// That will at least get rid of the syscall mask part of Protobox
 		proc_allow_all_syscalls(proc);
+
+		// Some processes also have a filter for mach messages, fortunately there is one allowed message id that can be used for the check-in
+		// Then we remove the filter to make other message ids accessible afterwards aswell
+		proc_remove_msg_filter(proc);
 	}
 
 	// For whatever reason after SpringBoard has restarted, AutoFill and other stuff stops working
@@ -284,16 +348,13 @@ static int systemwide_process_checkin(audit_token_t *processToken, char **rootPa
 		}
 		else {
 			dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-				killall("/System/Library/TextInput/kbd", false);
+				killall("/System/Library/TextInput/kbd", SIGKILL);
 			});
 		}
 	}
 	// For the Dopamine app itself we want to give it a saved uid/gid of 0, unsandbox it and give it CS_PLATFORM_BINARY
 	// This is so that the buttons inside it can work when jailbroken, even if the app was not installed by TrollStore
 	else if (string_has_suffix(procPath, "/Dopamine.app/Dopamine")) {
-char roothidefile[PATH_MAX];
-snprintf(roothidefile, sizeof(roothidefile), "%s.roothide",procPath);
-if(access(roothidefile, F_OK)==0 && !gFirstLoad) {
 		// svuid = 0, svgid = 0
 		uint64_t ucred = proc_ucred(proc);
 		kwrite32(proc + koffsetof(proc, svuid), 0);
@@ -303,9 +364,6 @@ if(access(roothidefile, F_OK)==0 && !gFirstLoad) {
 
 		// platformize
 		proc_csflags_set(proc, CS_PLATFORM_BINARY);
-} else {
-	kill(pid, SIGKILL);
-}
 	}
 
 #ifdef __arm64e__
@@ -332,7 +390,7 @@ if(access(roothidefile, F_OK)==0 && !gFirstLoad) {
 	return 0;
 }
 
-static int systemwide_fork_fix(audit_token_t *parentToken, uint64_t childPid)
+int systemwide_fork_fix(audit_token_t *parentToken, uint64_t childPid)
 {
 	int retval = 3;
 	uint64_t parentPid = audit_token_to_pid(*parentToken);
@@ -393,7 +451,7 @@ static int systemwide_fork_fix(audit_token_t *parentToken, uint64_t childPid)
 	if (childProc)  proc_rele(childProc);
 	if (parentProc) proc_rele(parentProc);
 
-	return 0;
+	return retval;
 }
 
 static int systemwide_cs_revalidate(audit_token_t *callerToken)
@@ -409,60 +467,8 @@ static int systemwide_cs_revalidate(audit_token_t *callerToken)
 	return -1;
 }
 
-static int systemwide_cs_drop_get_task_allow(audit_token_t *callerToken)
-{
-    uint64_t callerPid = audit_token_to_pid(*callerToken);
-    if (callerPid > 0) {
-        uint64_t callerProc = proc_find(callerPid);
-        if (callerProc) {
-            proc_csflags_clear(callerProc, CS_GET_TASK_ALLOW);
-            return 0;
-        }
-    }
-    return -1;
-}
-
-static int systemwide_patch_spawn(audit_token_t *callerToken, int pid, bool resume)
-{
-    uint64_t callerPid = audit_token_to_pid(*callerToken);
-    if (callerPid > 0) {
-        pid_t ppid = proc_get_ppid(pid);
-        if (callerPid == ppid) {
-            JBLogDebug("spawn patch: %d -> %d:%d resume=%d", callerPid, pid, ppid, resume);
-            if (proc_csflags_patch(pid) == 0){
-                if(resume)
-                    kill(pid, SIGCONT);
-                return 0;
-            }
-        }else{
-            JBLogError("spawn patch denied: %d -> %d:%d", callerPid, pid, ppid);
-        }
-    }
-    return -1;
-}
-
-static int systemwide_patch_exec_add(audit_token_t *callerToken, const char* exec_path, bool resume)
-{
-    uint64_t callerPid = audit_token_to_pid(*callerToken);
-    if (callerPid > 0) {
-        patchExecAdd((int)callerPid, exec_path, resume);
-        return 0;
-    }
-    return -1;
-}
-
-static int systemwide_patch_exec_del(audit_token_t *callerToken, const char* exec_path)
-{
-    uint64_t callerPid = audit_token_to_pid(*callerToken);
-    if (callerPid > 0){
-        patchExecDel((int)callerPid, exec_path);
-        return 0;
-    }
-    return -1;
-}
-
 struct jbserver_domain gSystemwideDomain = {
-	.permissionHandler = systemwide_domain_allowed,
+	.permissionHandler = roothide_domain_allowed,
 	.actions = {
 		// JBS_SYSTEMWIDE_GET_JBROOT
 		{
@@ -480,22 +486,13 @@ struct jbserver_domain gSystemwideDomain = {
 				{ 0 },
 			},
 		},
-		// JBS_SYSTEMWIDE_TRUST_BINARY
+		// JBS_SYSTEMWIDE_TRUST_FILE
 		{
-			.handler = systemwide_trust_binary,
-			.args = (jbserver_arg[]){
-				{ .name = "binary-path", .type = JBS_TYPE_STRING, .out = false },
-				{ .name = "preferred-archs", .type = JBS_TYPE_ARRAY, .out = false },
-				{ 0 },
-			},
-		},
-		// JBS_SYSTEMWIDE_TRUST_LIBRARY
-		{
-			.handler = systemwide_trust_library,
+			.handler = systemwide_trust_file,
 			.args = (jbserver_arg[]){
 				{ .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
-				{ .name = "library-path", .type = JBS_TYPE_STRING, .out = false },
-				{ .name = "caller-library-path", .type = JBS_TYPE_STRING, .out = false },
+				{ .name = "fd", .type = JBS_TYPE_UINT64, .out = false },
+				{ .name = "siginfo", .type = JBS_TYPE_DATA, .out = false },
 				{ 0 },
 			},
 		},
@@ -536,47 +533,6 @@ struct jbserver_domain gSystemwideDomain = {
 				{ .name = "value", .type = JBS_TYPE_XPC_GENERIC, .out = true },
 			},
 		},
-        // JBS_SYSTEMWIDE_CS_DROP_GET_TASK_ALLOW
-        {
-            // .action = JBS_SYSTEMWIDE_CS_DROP_GET_TASK_ALLOW,
-            .handler = systemwide_cs_drop_get_task_allow,
-            .args = (jbserver_arg[]) {
-                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
-                    { 0 },
-            },
-        },
-        // JBS_SYSTEMWIDE_PATCH_SPAWN
-        {
-            // .action = JBS_SYSTEMWIDE_PATCH_SPAWN,
-            .handler = systemwide_patch_spawn,
-            .args = (jbserver_arg[]) {
-                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
-                    { .name = "pid", .type = JBS_TYPE_UINT64, .out = false },
-                    { .name = "resume", .type = JBS_TYPE_BOOL, .out = false },
-                    { 0 },
-            },
-        },
-        // JBS_SYSTEMWIDE_PATCH_EXEC_ADD
-        {
-            // .action = JBS_SYSTEMWIDE_PATCH_EXEC_ADD,
-            .handler = systemwide_patch_exec_add,
-            .args = (jbserver_arg[]) {
-                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
-                    { .name = "exec-path", .type = JBS_TYPE_STRING, .out = false },
-                    { .name = "resume", .type = JBS_TYPE_BOOL, .out = false },
-                    { 0 },
-            },
-        },
-        // JBS_SYSTEMWIDE_PATCH_EXEC_DEL
-        {
-            // .action = JBS_SYSTEMWIDE_PATCH_EXEC_DEL,
-            .handler = systemwide_patch_exec_del,
-            .args = (jbserver_arg[]) {
-                    { .name = "caller-token", .type = JBS_TYPE_CALLER_TOKEN, .out = false },
-                    { .name = "exec-path", .type = JBS_TYPE_STRING, .out = false },
-                    { 0 },
-            },
-        },
 		{ 0 },
 	},
 };

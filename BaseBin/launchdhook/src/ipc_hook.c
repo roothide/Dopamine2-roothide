@@ -1,11 +1,8 @@
 #include <sandbox.h>
 #include <substrate.h>
-#include <libproc.h>
-#include <libjailbreak/libjailbreak.h>
-#include <libjailbreak/codesign.h>
-#include <libjailbreak/deny.h>
-#include <libjailbreak/log.h>
 
+#include <libjailbreak/libjailbreak.h>
+#include <libjailbreak/roothider.h>
 
 int (*sandbox_check_by_audit_token_orig)(audit_token_t au, const char *operation, int sandbox_filter_type, ...);
 int sandbox_check_by_audit_token_hook(audit_token_t au, const char *operation, int sandbox_filter_type, ...)
@@ -24,35 +21,23 @@ int sandbox_check_by_audit_token_hook(audit_token_t au, const char *operation, i
 	const void *arg10 = va_arg(a, void *);
 	va_end(a);
 	if (name && operation) {
-		pid_t pid = audit_token_to_pid(au);
-		uid_t uid = audit_token_to_euid(au);
 
-		uint32_t csFlags = 0;
-		csops(pid, CS_OPS_STATUS, &csFlags, sizeof(csFlags));
-
-		bool allow=false;
-		if(strcmp(operation, "mach-lookup") == 0) {
-			volatile int result1 = strncmp((char *)name, "cy:", 3);
-			volatile int result2 = strncmp((char *)name, "lh:", 3);
-			if (result1 == 0 || result2 == 0) {
-				allow = true;
+/************************** roothide specific *******************************/
+if(isBlacklistedToken(&au)) {
+	JBLogDebug("sandbox_check_by_audit_token operation=%s name=%s from %s", operation, name, proc_get_path(audit_token_to_pid(au),NULL));
+} else {
+/************************** roothide specific *******************************/
+		
+		if (strcmp(operation, "mach-lookup") == 0) {
+			if (strncmp((char *)name, "cy:", 3) == 0 || strncmp((char *)name, "lh:", 3) == 0) {
+				/* always allow */
+				return 0;
 			}
 		}
-
-		if(uid==501 && (csFlags & CS_PLATFORM_BINARY)==0)
-		{
-			char pathbuf[4*MAXPATHLEN]={0};
-			if(pid>0 && proc_pidpath(pid, pathbuf, sizeof(pathbuf))>0)
-			{
-				if(isBlacklisted(pathbuf)) {
-					JBLogDebug("sandbox_check_by_audit_token operation=%s name=%s from %s", operation, name, pathbuf);
-					allow = false;
-				}
-			}
-		}
-
-		if(allow) return 0;
 	}
+
+}
+
 	return sandbox_check_by_audit_token_orig(au, operation, sandbox_filter_type, name, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
 

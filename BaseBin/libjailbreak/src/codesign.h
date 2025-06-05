@@ -61,4 +61,9 @@
 int csops(pid_t pid, unsigned int  ops, void * useraddr, size_t usersize);
 int csops_audittoken(pid_t pid, unsigned int ops, void * useraddr, size_t usersize, audit_token_t * token);
 
+#ifdef __OBJC__
+#import <Foundation/Foundation.h>
+int resign_file(NSString *filePath, NSString *identifier, bool preserveMetadata);
+#endif
+
 #endif

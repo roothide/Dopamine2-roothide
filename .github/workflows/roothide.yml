@@ -66,17 +66,17 @@ jobs:
           export BASEDIR="$(pwd)"
           export THEOS="${BASEDIR}/theos"
           typeset itemcount=$(plutil -extract items raw -expect array ./Application/Dopamine/UI/Settings/Credits.plist)
-          for ((i=0; i<$itemcount; i++)); do if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then DOCreditsCellIndex=$i; fi done;
+          for ((i=0; i<$itemcount; i++)); do if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then DOCreditsCellIndex=$i; break; fi; done;
           plutil -insert items.$DOCreditsCellIndex.names -xml "<dict><key>name</key><string>${{ github.actor }}</string><key>link</key><string>https://github.com/${{ github.repository }}</string></dict>" -append ./Application/Dopamine/UI/Settings/Credits.plist
           gmake -j$(sysctl -n hw.physicalcpu)
-          TAG=$(git describe --tags --abbrev=0)
-          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-v${TAG}.tipa"
-          echo "tag=${TAG}" >> $GITHUB_ENV
+          VERSION=$(cat ./BaseBin/_external/basebin/.version).$(git rev-parse --short HEAD)
+          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine-${VERSION}.tipa"
+          echo "version=${VERSION}" >> $GITHUB_ENV
 
       - name: Upload Artifact
         id: dopamine-latest-upload
         uses: actions/upload-artifact@v4
         with:
-          name: roothide-Dopamine2-v${{ env.tag }}.tipa
+          name: roothide-Dopamine-${{ env.version }}.tipa
           path: |
-            ${{ github.workspace }}/Application/roothide-Dopamine2-v${{ env.tag }}.tipa
+            ${{ github.workspace }}/Application/roothide-Dopamine-${{ env.version }}.tipa

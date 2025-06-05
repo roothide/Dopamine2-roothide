@@ -85,19 +85,6 @@ void proc_csflags_clear(uint64_t proc, uint32_t flags)
 	proc_csflags_update(proc, proc_getcsflags(proc) & ~(uint32_t)flags);
 }
 
-// To replace dyld patch, make dyld respect DYLD_ environment variables
-int proc_csflags_patch(int pid)
-{
-    int ret = 0;
-    uint64_t proc = proc_find(pid);
-    if(proc) {
-        proc_csflags_set(proc, CS_GET_TASK_ALLOW);
-    } else {
-        ret = -1;
-    }
-    return ret;
-}
-
 uint64_t ipc_entry_lookup(uint64_t space, mach_port_name_t name)
 {
 	uint64_t table = 0;
