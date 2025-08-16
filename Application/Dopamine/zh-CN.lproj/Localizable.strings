@@ -114,3 +114,6 @@
 "Status_Title_Select_Package_Managers" = "请选择包管理器";
 "Select_Package_Managers_Install_Message" = "如果你不确定选择哪一个比较好，请选择 Sileo";
 "Continue" = "继续";
+
+"Enable dyld patch" = "启用 dyld 补丁";
+"When spinlock fix is ​​enabled, app extensions of blacklisted apps will be disabled and may also cause spinlock panics when the blacklisted app is in foreground/background.\n\nYou can first try disabling tweak injection for the app in Choicy (spinlock fix still works), and only blacklist the app if that doesn't work." = "启用 spinlock 修复后，黑名单应用的应用扩展将被禁用，并且当黑名单应用处于 前台/后台 时，还可能导致 spinlock 崩溃。\n\n你可以先尝试在 Choicy 中为该应用禁用 tweak 注入（spinlock 修复仍然有效），如果无效，再将该应用加入黑名单。";
