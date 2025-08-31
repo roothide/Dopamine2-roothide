@@ -3,14 +3,12 @@
 #import "util.h"
 #import <sys/stat.h>
 
-/*
 NSString *NSPrebootUUIDPath(NSString *relativePath)
 {
 	@autoreleasepool {
 		return [NSString stringWithUTF8String:prebootUUIDPath(relativePath.UTF8String)];
 	}
 }
-*/
 
 void _JBFixMobilePermissionsOfDirectory(NSString *directoryPath, BOOL recursive)
 {

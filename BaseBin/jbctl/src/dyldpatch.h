@@ -1,1 +1,0 @@
-int apply_dyld_patch(const char *dyldPath);

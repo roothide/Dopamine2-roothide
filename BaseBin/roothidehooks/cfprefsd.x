@@ -5,7 +5,7 @@
 
 #define PROC_PIDPATHINFO_MAXSIZE        (4*MAXPATHLEN)
 
-bool __thread gAllowRedirection = true;
+pid_t __thread gCurrentClientPid = 0;
 
 BOOL preferencePlistNeedsRedirection(NSString *plistPath)
 {
@@ -65,15 +65,18 @@ BOOL new_CFPrefsGetPathForTriplet(CFStringRef identifier, CFStringRef user, BOOL
 	NSLog(@"CFPrefsGetPathForTriplet identifier=%@ user=%@ byHost=%d container=%@ ret=%d : %s", identifier, user, byHost, container, orig, orig?(char*)buffer:"");
 	// NSLog(@"callstack=%@", [NSThread callStackSymbols]);
 
-	if(!gAllowRedirection) {
-		NSLog(@"CFPrefsGetPathForTriplet deny redirection");
-		return orig;
-	}
-
 	if(orig && buffer)
 	{
 		NSString* origPath = [NSString stringWithUTF8String:(char*)buffer];
 		BOOL needsRedirection = preferencePlistNeedsRedirection(origPath);
+
+		if (needsRedirection) {
+			if(gCurrentClientPid>0 && jbclient_blacklist_check_pid(gCurrentClientPid)==true) {
+				NSLog(@"CFPrefsGetPathForTriplet deny redirection for process (%d) %s", gCurrentClientPid, proc_get_path(gCurrentClientPid,NULL));
+				needsRedirection = NO;
+			}
+		}
+		
 		if (needsRedirection) {
 			NSLog(@"Plist redirected to jbroot:%@", origPath);
 			const char* newpath = jbroot(origPath.UTF8String);
@@ -81,6 +84,9 @@ BOOL new_CFPrefsGetPathForTriplet(CFStringRef identifier, CFStringRef user, BOOL
 			if(strlen(newpath) < 1024) {
 				strcpy((char*)buffer, newpath);
 				NSLog(@"CFPrefsGetPathForTriplet redirect to %s", buffer);
+			}
+			else {
+				return NO;
 			}
 		}
 	}
@@ -103,28 +109,13 @@ void* new__CFPrefsDaemon_handleMessage_fromPeer_replyHandler__(id self, xpc_obje
     uid_t clientUid = xpc_connection_get_euid(connection);
     pid_t clientPid = xpc_connection_get_pid(connection);
 
-	uint32_t csFlags = 0;
-	csops(clientPid, CS_OPS_STATUS, &csFlags, sizeof(csFlags));
-
-	char pathbuf[PROC_PIDPATHINFO_MAXSIZE]={0};
-	if(proc_pidpath(clientPid, pathbuf, sizeof(pathbuf)) <= 0) {
-		NSLog(@"CFPrefsDaemon: unable to get proc path for %d", clientPid);
-	}
-
-	NSLog(@"CFPrefsDaemon: handleMessage %p/%d pid=%d uid=%d csflags=%x proc=%s", message, xpc_get_type(message)==XPC_TYPE_DICTIONARY, clientPid, clientUid, csFlags, pathbuf);
+	NSLog(@"CFPrefsDaemon: handleMessage %p/%d pid=%d uid=%d proc=%s", message, xpc_get_type(message)==XPC_TYPE_DICTIONARY, clientPid, clientUid, proc_get_path(clientPid,NULL));
 
 	// char* desc = xpc_copy_description(message);
 	// NSLog(@"CFPrefsDaemon: handleMessage Operation=%lld, msg=%s", xpc_dictionary_get_int64(message, "CFPreferencesOperation"), desc);
 	// if(desc) free(desc);
 
-	bool allow = true;
-	if(clientUid==501 && (csFlags & CS_PLATFORM_BINARY)==0) {
-		if(isBlacklisted(pathbuf)) {
-			NSLog(@"CFPrefsDaemon: deny redirection %s", pathbuf);
-			allow = false;
-		}
-	}
-	gAllowRedirection = allow;
+	gCurrentClientPid = clientPid;
 
 	return DISPATCH_orig__CFPrefsDaemon_handleMessage_fromPeer_replyHandler__(self, message, connection, replyHandler);
 }

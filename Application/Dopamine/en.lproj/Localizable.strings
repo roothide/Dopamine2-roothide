@@ -38,13 +38,11 @@
 "Button_Reboot" = "Reboot";
 
 // Settings Options
-"Settings_DevMode" = "Enable Developer Mode";
-"Alert_Disable_DevMode_Title" = "Disable Developer Mode";
-"Alert_Disable_DevMode_Body" = "Disabling developer mode will cause some jailbreak programs to be unable to run. Are you sure you want to continue?";
 "Settings_Tweak_Injection" = "Tweak Injection";
 "Settings_iDownload" = "iDownload (Developer Shell)";
 "Settings_Verbose_Logs" = "Verbose Logs";
 "Settings_Apps_JIT" = "Allow JIT in Apps";
+"Settings_Allow_Old_arm64e_ABI_Libraries" = "Allow Legacy arm64e Libraries";
 "Settings_Jetsam_Multiplier" = "Jetsam Multiplier";
 
 // Settings Buttons
@@ -75,6 +73,7 @@
 "Alert_Change_Mobile_Password_Body" = "Set the password of the \"mobile\" user on your device, this can also be used for root access using sudo. If you want to set the root password, you can do so from a mobile shell using the command \"sudo passwd root\"";
 "Password_Placeholder" = "Password";
 "Repeat_Password_Placeholder" = "Repeat Password";
+"Password_Auth_Required" = "Authentication is required to change your mobile password.";
 "Button_Change" = "Change";
 "Button_Cancel" = "Cancel";
 "Button_Continue" = "Continue";

@@ -4,6 +4,8 @@
 #include <libjailbreak/codesign.h>
 #include <libjailbreak/libjailbreak.h>
 
+extern void systemwide_domain_set_enabled(bool enabled);
+
 static bool platform_domain_allowed(audit_token_t clientToken)
 {
 	pid_t pid = audit_token_to_pid(clientToken);
@@ -55,6 +57,15 @@ struct jbserver_domain gPlatformDomain = {
 			.args = (jbserver_arg[]){
 				{ .name = "key", .type = JBS_TYPE_STRING, .out = false },
 				{ .name = "value", .type = JBS_TYPE_XPC_GENERIC, .out = false },
+				{ 0 },
+			},
+		},
+		// JBS_PLATFORM_SET_SYSTEMWIDE_DOMAIN_ENABLED
+		{
+			.handler = roothide_unsupport_request,
+			.args = (jbserver_arg[]){
+				{ .name = "enabled", .type = JBS_TYPE_BOOL, .out = false },
+				{ 0 },
 			},
 		},
 		{ 0 },

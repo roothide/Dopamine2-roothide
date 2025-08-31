@@ -148,6 +148,62 @@ int physwritebuf(uint64_t physaddr, const void* input, size_t size)
 	return -1;
 }
 
+int vreadbuf(uint64_t tte_p, const void *addr, void *outdata, size_t datalen)
+{
+	__block bool success = true;
+	enumerate_pages((uint64_t)addr, datalen, vm_real_kernel_page_size, ^bool(uint64_t curStart, size_t curSize){
+		uint64_t curPA = vtophys(tte_p, curStart);
+		if (curPA == 0) {
+			success = false;
+			return success;
+		}
+		success = physreadbuf(curPA, &outdata[curStart - (uint64_t)addr], curSize) == 0;
+		return success;
+	});
+	return success ? 0 : -1;
+}
+
+int vwritebuf(uint64_t tte_p, const void *addr, const void *indata, size_t datalen)
+{
+	__block bool success = true;
+	enumerate_pages((uint64_t)addr, datalen, vm_real_kernel_page_size, ^bool(uint64_t curStart, size_t curSize){
+		uint64_t curPA = vtophys(tte_p, curStart);
+		if (curPA == 0) {
+			success = false;
+			return success;
+		}
+		success = physwritebuf(curPA, &indata[curStart - (uint64_t)addr], curSize) == 0;
+		return success;
+	});
+	return success ? 0 : -1;
+}
+
+int proc_vreadbuf(uint64_t proc, const void *addr, void *outdata, size_t datalen)
+{
+	uint64_t task = proc_task(proc);
+	if (!task) return -1;
+	uint64_t map = kread_ptr(task + koffsetof(task, map));
+	if (!map) return -1;
+	uint64_t pmap = kread_ptr(map + koffsetof(vm_map, pmap));
+	if (!pmap) return -1;
+	uint64_t ttep = kread_ptr(pmap + koffsetof(pmap, ttep));
+	if (!ttep) return -1;
+	return vreadbuf(ttep, addr, outdata, datalen);
+}
+
+int proc_vwritebuf(uint64_t proc, const void *addr, const void *indata, size_t datalen)
+{
+	uint64_t task = proc_task(proc);
+	if (!task) return -1;
+	uint64_t map = kread_ptr(task + koffsetof(task, map));
+	if (!map) return -1;
+	uint64_t pmap = kread_ptr(map + koffsetof(vm_map, pmap));
+	if (!pmap) return -1;
+	uint64_t ttep = kread_ptr(pmap + koffsetof(pmap, ttep));
+	if (!ttep) return -1;
+	return proc_vwritebuf(ttep, addr, indata, datalen);
+}
+
 // Convenience Wrappers
 
 uint64_t physread64(uint64_t pa)

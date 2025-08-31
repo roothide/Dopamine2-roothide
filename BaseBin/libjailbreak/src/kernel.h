@@ -61,6 +61,4 @@ kern_return_t pmap_enter_options_addr(uint64_t pmap, uint64_t pa, uint64_t va);
 uint64_t pmap_remove_options(uint64_t pmap, uint64_t start, uint64_t end);
 void pmap_remove(uint64_t pmap, uint64_t start, uint64_t end);
 
-int proc_csflags_patch(int pid);
-
 #endif

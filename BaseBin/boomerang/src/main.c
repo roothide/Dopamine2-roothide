@@ -9,52 +9,13 @@
 #include <libjailbreak/kcall_arm64.h>
 #include <libjailbreak/jbserver_boomerang.h>
 
-#include <errno.h>
-#include <libproc.h>
-#include <libproc_private.h>
-#include <libjailbreak/log.h>
-#include <libjailbreak/kernel.h>
-#include <signal.h>
-
-int unrestrict(pid_t pid, int (*callback)(pid_t pid), bool should_resume) {
-    int retries = 0;
-    while (true) {
-        struct proc_bsdinfo procInfo = {0};
-        int ret = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &procInfo, sizeof(procInfo));
-        if (ret != sizeof(procInfo)) {
-            JBLogDebug("bsdinfo failed, %d,%s\n", errno, strerror(errno));
-            return -1;
-        }
-
-        JBLogDebug("%d pstat=%x flag=%x xstat=%x sec=%lld %lld nice=%d\n", ret, procInfo.pbi_status, procInfo.pbi_flags,
-                   procInfo.pbi_xstatus, procInfo.pbi_start_tvsec, procInfo.pbi_start_tvusec, procInfo.pbi_nice);
-
-        if (procInfo.pbi_status == SSTOP) {
-            JBLogDebug("%d pstat=%x flag=%x xstat=%x\n", ret, procInfo.pbi_status, procInfo.pbi_flags,
-                       procInfo.pbi_xstatus);
-            break;
-        }
-
-        if (procInfo.pbi_status != SRUN) {
-            JBLogDebug("unexcept %d pstat=%x\n", ret, procInfo.pbi_status);
-            return -1;
-        }
-        retries++;
-        usleep(10 * 1000);
-    }
-
-    JBLogDebug("unrestrict retries=%d\n", retries);
-
-    int ret = callback(pid);
-
-    if (should_resume)
-        kill(pid, SIGCONT);
-
-    return ret;
-}
+#include <libjailbreak/roothider.h>
 
 int main(int argc, char* argv[])
 {
+	crashreporter_start();
+	JBLogDebug("Boomerang started");
+
 	setsid();
 
 	__block bool launchdHasPhysrw = false;
@@ -100,8 +61,15 @@ int main(int argc, char* argv[])
 	// Send done message to launchd
 	jbclient_boomerang_done();
 
-	// give launchd GET_TASK_ALLOW
-	unrestrict(1, proc_csflags_patch, true);
+
+/******************* roothide specific **********************/
+// patch new launchd process
+if(unrestrict(1, roothide_patch_proc, true) != 0) {
+	JBLogError("Failed to unrestrict launchd");
+	return -1;
+}
+/******************* roothide specific **********************/
+
 
 	// Now make our server run so that launchd can get everything back
 	dispatch_main();

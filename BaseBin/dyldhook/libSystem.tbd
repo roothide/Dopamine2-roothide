@@ -1,0 +1,10 @@
+--- !tapi-tbd-v2
+archs:           [ arm64, arm64e ]
+platform:        ios
+flags:           [ not_app_extension_safe, installapi ]
+install-name:    '/usr/lib/libSystem.B.dylib'
+current-version: 0
+compatibility-version: 0
+exports:
+  - archs:           [ arm64, arm64e ]
+...

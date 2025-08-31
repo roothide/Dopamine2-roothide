@@ -7,7 +7,7 @@ LDFLAGS = -dynamiclib -rpath @loader_path/.jbroot/Library/Frameworks -rpath @loa
 sign: $(TARGET)
 	@ldid -S $^
 
-$(TARGET): $(wildcard src/*.m src/*.c ../libjailbreak/src/jbclient_xpc.c)
+$(TARGET): $(wildcard src/*.m src/*.c ../libjailbreak/src/jbclient_*.c)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 clean:

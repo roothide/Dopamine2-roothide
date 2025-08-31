@@ -8,56 +8,101 @@ extern char **environ;
 #pragma GCC diagnostic ignored "-Wobjc-method-access"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-#define PROC_PIDPATHINFO_MAXSIZE        (4*MAXPATHLEN)
 /*lsd can only get path for normal app via proc_pidpath, or we can use
-  xpc_connection_get_audit_token([xpc _xpcConnection], &token) //_LSCopyExecutableURLForXPCConnection
+  xpc_connection_get_audit_token([connection _xpcConnection], &token) //_LSCopyExecutableURLForXPCConnection
   proc_pidpath_audittoken(tokenarg, buffer, size) //_LSCopyExecutableURLForAuditToken 
   */
 
+
+@interface LSApplicationWorkspace : NSObject
++ (LSApplicationWorkspace*)defaultWorkspace;
+- (NSArray*)applicationsAvailableForHandlingURLScheme:(NSString*)scheme;
+- (NSArray*)applicationsAvailableForOpeningURL:(NSURL*)url legacySPI:(BOOL)legacySPI;
+- (NSArray*)applicationsAvailableForOpeningURL:(NSURL*)url;
+@end
+
+BOOL isJailbreakURLScheme(NSString* scheme)
+{
+	NSArray* apps = [[NSClassFromString(@"LSApplicationWorkspace") defaultWorkspace] applicationsAvailableForHandlingURLScheme:scheme];
+	for(id app in apps) //LSApplicationProxy
+	{
+		NSURL* bundleURL = [app performSelector:@selector(bundleURL)];
+		if(!bundleURL) continue;
+
+		if(isJailbreakBundlePath(bundleURL.path.fileSystemRepresentation)) {
+			return YES;
+		}
+	}
+	return NO;
+}
+
+static const void *kBlockSchemeTagKey = &kBlockSchemeTagKey;
+
+%hook _LSURLOverride
+-(id)initWithOriginalURL:(NSURL*)url
+{
+	NSNumber* tag = objc_getAssociatedObject(url, kBlockSchemeTagKey);
+	if(tag && tag.boolValue) {
+		NSLog(@"block -[LSURLOverride initWithOriginalURL:] %@", url);
+		return nil;
+	}
+	return %orig;
+}
+%end
+
 %hook _LSCanOpenURLManager
 
-- (BOOL)canOpenURL:(NSURL*)url publicSchemes:(BOOL)ispublic privateSchemes:(BOOL)isprivate XPCConnection:(NSXPCConnection*)xpc error:(NSError*)err
+-(void*)getIsURL:(NSURL*)url alwaysCheckable:(BOOL*)pCheckable hasHandler:(BOOL*)pHasHandler
 {
-	BOOL result = %orig;
+	BOOL _checkable = NO;
+	BOOL _hasHandler = NO;
+	void* result = %orig(url, &_checkable, &_hasHandler);
+	NSLog(@"getIsURL:%@ alwaysCheckable:%d hasHandler:%d", url, _checkable, _hasHandler);
 
-	if(!result) return result;
-	if(!xpc) return result;
-
-	char pathbuf[PROC_PIDPATHINFO_MAXSIZE]={0};
-	if(proc_pidpath(xpc.processIdentifier, pathbuf, sizeof(pathbuf)) <= 0) {
-		NSLog(@"canOpenURL: unable to get proc path for %d", xpc.processIdentifier);
-		return result;
-	}
-
-	NSLog(@"canOpenURL:%@ publicSchemes:%d privateSchemes:%d XPCConnection:%@ proc:%d,%s", url, ispublic, isprivate, xpc, xpc.processIdentifier, pathbuf);
-	//if(xpc) NSLog(@"canOpenURL:xpc=%@", xpc);
-
-	NSArray* jbschemes = @[
-		@"filza", 
-		@"db-lmvo0l08204d0a0",
-		@"boxsdk-810yk37nbrpwaee5907xc4iz8c1ay3my",
-		@"com.googleusercontent.apps.802910049260-0hf6uv6nsj21itl94v66tphcqnfl172r",
-		@"sileo",
-		@"zbra", 
-		@"santander", 
-		@"icleaner", 
-		@"xina", 
-		@"ssh",
-		@"apt-repo", 
-		@"cydia",
-		@"activator",
-		@"postbox",
-	];
-
-	if(isSandboxedApp(xpc.processIdentifier, pathbuf))
+	if(_checkable || _hasHandler)
 	{
-		if([jbschemes containsObject:url.scheme.lowercaseString]) {
-			NSLog(@"block %@ for %s", url, pathbuf);
-			return NO;
+		NSNumber* tag = objc_getAssociatedObject(url, kBlockSchemeTagKey);
+		if(tag && tag.boolValue) {
+			NSLog(@"block -[_LSCanOpenURLManager getIsURL:alwaysCheckable:hasHandler:] %@", url);
+			_hasHandler = NO;
+			_checkable = NO;
 		}
 	}
 
+	if(pCheckable) *pCheckable = _checkable;
+	if(pHasHandler) *pHasHandler = _hasHandler;
 	return result;
+}
+
+- (BOOL)canOpenURL:(NSURL*)url publicSchemes:(BOOL)ispublic privateSchemes:(BOOL)isprivate XPCConnection:(NSXPCConnection*)connection error:(NSError*)err
+{
+	BOOL blocked = NO;
+	
+	if(connection) //connection=nil if comes from lsd server
+	{
+		pid_t pid = connection.processIdentifier;
+
+		NSLog(@"canOpenURL:%@ publicSchemes:%d privateSchemes:%d XPCConnection:%@ proc:%d,%s", url, ispublic, isprivate, connection, pid, proc_get_path(pid,NULL));
+		//if(connection) NSLog(@"canOpenURL connection=%@", connection);
+
+		if(jbclient_blacklist_check_pid(pid)==true)
+		{
+			if(isJailbreakURLScheme(url.scheme))
+			{
+				NSLog(@"block canOpenURL:%@", url);
+
+				objc_setAssociatedObject(url, kBlockSchemeTagKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+				blocked = YES;
+			}
+		}
+	}
+
+	BOOL ret = %orig;
+	if(blocked) {
+		assert(ret == NO);
+	}
+	return ret;
 }
 
 %end
@@ -65,7 +110,7 @@ extern char **environ;
 
 %hook _LSQueryContext
 
--(NSMutableDictionary*)_resolveQueries:(NSMutableSet*)queries XPCConnection:(NSXPCConnection*)xpc error:(NSError*)err 
+-(NSMutableDictionary*)_resolveQueries:(NSMutableSet*)queries XPCConnection:(NSXPCConnection*)connection error:(NSError*)err 
 {
 	NSMutableDictionary* result = %orig;
 	/*
@@ -75,18 +120,17 @@ extern char **environ;
 	}
 	*/
 
-	if(!result) return result;
-	if(!xpc) return result;
-	
-	char pathbuf[PROC_PIDPATHINFO_MAXSIZE]={0};
-	if(proc_pidpath(xpc.processIdentifier, pathbuf, sizeof(pathbuf)) <= 0) {
-		NSLog(@"_resolveQueries: unable to get proc path for %d", xpc.processIdentifier);
+	if(!result || !connection) {
 		return result;
 	}
 
-	if(!isNormalAppPath(pathbuf)) return result;
+	pid_t pid = connection.processIdentifier;
 
-	NSLog(@"_resolveQueries:%@:%@ XPCConnection:%@ result=%@/%ld proc:%d,%s", [queries class], queries, xpc, result.class, result.count, xpc.processIdentifier, pathbuf);
+	if(jbclient_blacklist_check_pid(pid)==false) {
+		return result;
+	}
+
+	NSLog(@"_resolveQueries:%@:%@ XPCConnection:%@ result=%@/%ld proc:%d,%s", [queries class], queries, connection, result.class, result.count, pid, proc_get_path(pid,NULL));
 	//NSLog(@"result=%@, %@", result.allKeys, result.allValues);
 	for(id key in result)
 	{
@@ -107,7 +151,7 @@ extern char **environ;
 				if(!appbundle) continue;
 
 				NSURL* bundleURL = [appbundle performSelector:@selector(bundleURL)];
-				if(isJailbreakPath(bundleURL.path.fileSystemRepresentation)) {
+				if(isJailbreakBundlePath(bundleURL.path.fileSystemRepresentation)) {
 					NSLog(@"remove plugin %@ (%@)", plugin, bundleURL);
 					[removed addIndex:i];
 				}
@@ -149,7 +193,7 @@ extern char **environ;
 				NSArray* _pluginUnits = [unitsResult valueForKey:@"_pluginUnits"];
 				NSLog(@"LSPlugInQueryAllUnits: _dbUUID=%@, _pluginUnits count=%ld", _dbUUID, _pluginUnits.count);
 				id unitQuery = [[NSClassFromString(@"LSPlugInQueryWithUnits") alloc] initWithPlugInUnits:_pluginUnits forDatabaseWithUUID:_dbUUID];
-				NSMutableDictionary* queriesResult = [self _resolveQueries:[NSSet setWithObject:unitQuery] XPCConnection:xpc error:err];
+				NSMutableDictionary* queriesResult = [self _resolveQueries:[NSSet setWithObject:unitQuery] XPCConnection:connection error:err];
 				if(queriesResult)
 				{
 					for(id queryKey in queriesResult)
