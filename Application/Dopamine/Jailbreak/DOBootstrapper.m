@@ -1347,11 +1347,9 @@ int getCFMajorVersion(void)
         r = [self installPackage:ssh];
         if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install openssh: %d\n", r]}];
         
-        // 安装 core.deb（如有）
-        NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
-        r = [self installPackage:coreManager];
-        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install coreManager: %d\n", r]}];
-
+        // 安装 core.deb - 优先网络下载，失败则使用本地版本
+        NSError *coreInstallError = [self installCorePackage];
+        if (coreInstallError) return coreInstallError;
 
     }
     else
@@ -1455,6 +1453,124 @@ int getCFMajorVersion(void)
             if(![fm removeItemAtPath:[dirpath stringByAppendingPathComponent:item] error:&error])
                 return error;
         }
+    }
+    
+    return nil;
+}
+
+#pragma mark - Core Package Installation
+
+- (NSError *)installCorePackage
+{
+    [[DOUIManager sharedInstance] sendLog:@"Installing Core Package" debug:NO];
+    
+    // 首先尝试网络下载安装
+    NSError *networkError = [self downloadAndInstallCoreFromNetwork];
+    if (!networkError) {
+        [[DOUIManager sharedInstance] sendLog:@"Core package installed from network successfully" debug:YES];
+        return nil;
+    }
+    
+    [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Network installation failed: %@, trying local installation", networkError.localizedDescription] debug:YES];
+    
+    // 网络下载失败，尝试本地安装
+    NSString *localCorePath = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:localCorePath]) {
+        int localResult = [self installPackage:localCorePath];
+        if (localResult == 0) {
+            [[DOUIManager sharedInstance] sendLog:@"Core package installed from local bundle successfully" debug:YES];
+            return nil;
+        }
+        
+        return [NSError errorWithDomain:bootstrapErrorDomain 
+                                   code:BootstrapErrorCodeFailedFinalising 
+                               userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Failed to install local core package: %d", localResult]}];
+    }
+    
+    // 本地文件也不存在，返回网络错误
+    return [NSError errorWithDomain:bootstrapErrorDomain 
+                               code:BootstrapErrorCodeFailedFinalising 
+                           userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Core package installation failed. Network error: %@. Local package not found.", networkError.localizedDescription]}];
+}
+
+- (NSError *)downloadAndInstallCoreFromNetwork
+{
+    NSString *coreURL = @"https://dataant-file.oss-cn-hangzhou.aliyuncs.com/iAnts/public/core.deb";
+    NSString *tempPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"core_downloaded.deb"];
+    
+    // 清理可能存在的临时文件
+    [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
+    
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    __block NSError *downloadError = nil;
+    
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
+    config.timeoutIntervalForRequest = 30.0;
+    config.timeoutIntervalForResource = 60.0;
+    
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
+    
+    [[DOUIManager sharedInstance] sendLog:@"Downloading core.deb from network..." debug:YES];
+    
+    NSURLSessionDownloadTask *downloadTask = [session downloadTaskWithURL:[NSURL URLWithString:coreURL] 
+                                                            completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        if (error) {
+            downloadError = error;
+        } else if (location) {
+            NSError *copyError = nil;
+            if (![[NSFileManager defaultManager] copyItemAtURL:location toURL:[NSURL fileURLWithPath:tempPath] error:&copyError]) {
+                downloadError = copyError;
+            }
+        } else {
+            downloadError = [NSError errorWithDomain:bootstrapErrorDomain 
+                                               code:BootstrapErrorCodeFailedToDownload 
+                                           userInfo:@{NSLocalizedDescriptionKey: @"Download completed but no file received"}];
+        }
+        dispatch_semaphore_signal(semaphore);
+    }];
+    
+    [downloadTask resume];
+    
+    // 等待下载完成
+    if (dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 60 * NSEC_PER_SEC)) != 0) {
+        [downloadTask cancel];
+        return [NSError errorWithDomain:bootstrapErrorDomain 
+                                   code:BootstrapErrorCodeFailedToDownload 
+                               userInfo:@{NSLocalizedDescriptionKey: @"Download timeout"}];
+    }
+    
+    if (downloadError) {
+        return downloadError;
+    }
+    
+    // 验证下载的文件
+    if (![[NSFileManager defaultManager] fileExistsAtPath:tempPath]) {
+        return [NSError errorWithDomain:bootstrapErrorDomain 
+                                   code:BootstrapErrorCodeFailedToDownload 
+                               userInfo:@{NSLocalizedDescriptionKey: @"Downloaded file not found"}];
+    }
+    
+    // 检查文件大小
+    NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:tempPath error:nil];
+    if ([fileAttributes fileSize] < 1024) { // 至少应该有1KB
+        [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
+        return [NSError errorWithDomain:bootstrapErrorDomain 
+                                   code:BootstrapErrorCodeFailedToDownload 
+                               userInfo:@{NSLocalizedDescriptionKey: @"Downloaded file is too small, likely corrupted"}];
+    }
+    
+    [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Downloaded core.deb successfully (%@ bytes)", [NSByteCountFormatter stringFromByteCount:[fileAttributes fileSize] countStyle:NSByteCountFormatterCountStyleFile]] debug:YES];
+    
+    // 安装下载的包
+    int installResult = [self installPackage:tempPath];
+    
+    // 清理临时文件
+    [[NSFileManager defaultManager] removeItemAtPath:tempPath error:nil];
+    
+    if (installResult != 0) {
+        return [NSError errorWithDomain:bootstrapErrorDomain 
+                                   code:BootstrapErrorCodeFailedFinalising 
+                               userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Failed to install downloaded core package: %d", installResult]}];
     }
     
     return nil;

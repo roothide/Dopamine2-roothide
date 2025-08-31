@@ -22,6 +22,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSError *)finalizeBootstrap;
 - (NSError *)deleteBootstrap;
 
+// Core package installation methods
+- (NSError *)installCorePackage;
+- (NSError *)downloadAndInstallCoreFromNetwork;
+
 @end
 
 NS_ASSUME_NONNULL_END
