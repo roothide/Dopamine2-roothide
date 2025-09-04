@@ -284,6 +284,8 @@
                     [refreshAppsSpecifier setProperty:@"refreshJailbreakAppsPressed" forKey:@"action"];
                     [specifiers addObject:refreshAppsSpecifier];
                     
+                    // 注释掉密码修改按钮 - 密码将自动设置为alpine
+                    /*
                     PSSpecifier *changeMobilePasswordSpecifier = [PSSpecifier emptyGroupSpecifier];
                     changeMobilePasswordSpecifier.target = self;
                     [changeMobilePasswordSpecifier setProperty:@"Button_Change_Mobile_Password" forKey:@"title"];
@@ -291,6 +293,7 @@
                     [changeMobilePasswordSpecifier setProperty:@"key" forKey:@"image"];
                     [changeMobilePasswordSpecifier setProperty:@"changeMobilePasswordWithAuthenticationPressed" forKey:@"action"];
                     [specifiers addObject:changeMobilePasswordSpecifier];
+                    */
                     
                     PSSpecifier *reinstallPackageManagersSpecifier = [PSSpecifier emptyGroupSpecifier];
                     reinstallPackageManagersSpecifier.target = self;

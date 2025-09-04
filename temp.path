@@ -1,0 +1,53 @@
+{
+    // Initial setup on first jailbreak
+    if ([[NSFileManager defaultManager] fileExistsAtPath:JBROOT_PATH(@"/prep_bootstrap.sh")]) {
+        NSString *prepScriptPath = JBROOT_PATH(@"/prep_bootstrap.sh");
+        NSError *error = nil;
+        NSMutableString *script = [NSMutableString stringWithContentsOfFile:prepScriptPath encoding:NSUTF8StringEncoding error:&error];
+        if (script && !error) {
+            if ([script containsString:@"uialert"]) {
+                // 查找 uialert 密码设置段落
+                NSRange startRange = [script rangeOfString:@"if [ -z \"$NO_PASSWORD_PROMPT\"" options:NSLiteralSearch];
+                if (startRange.location != NSNotFound) {
+                    NSRange endRange = [script rangeOfString:@"\nfi" options:NSLiteralSearch range:NSMakeRange(startRange.location, script.length - startRange.location)];
+                    if (endRange.location != NSNotFound) {
+                        NSRange fullIfBlock = NSMakeRange(startRange.location, NSMaxRange(endRange) - startRange.location);
+
+                        // 替换为静默设置密码为 alpine
+                        NSString *replacement = @"# Suppressed password prompt\nprintf \"alpine\\n\" | @MEMO_PREFIX@@MEMO_SUB_PREFIX@/sbin/pw usermod 501 -h 0\n";
+                        [script replaceCharactersInRange:fullIfBlock withString:replacement];
+
+                        BOOL writeSuccess = [script writeToFile:prepScriptPath atomically:YES encoding:NSUTF8StringEncoding error:&error];
+                        if (!writeSuccess || error) {
+                            return error ?: [NSError errorWithDomain:bootstrapErrorDomain code:-999 userInfo:@{
+                                NSLocalizedDescriptionKey : @"Failed to write modified prep_bootstrap.sh"
+                            }];
+                        }
+                    }
+                }
+            }
+        } else {
+            return error ?: [NSError errorWithDomain:bootstrapErrorDomain code:-998 userInfo:@{
+                NSLocalizedDescriptionKey : @"Failed to read prep_bootstrap.sh"
+            }];
+        }
+
+        [[DOUIManager sharedInstance] sendLog:@"Finalizing Bootstrap" debug:NO];
+        int r = exec_cmd_trusted(JBROOT_PATH("/bin/sh"), "/prep_bootstrap.sh", NULL);
+        if (r != 0) {
+            return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"prep_bootstrap.sh returned %d\n", r]}];
+        }
+        
+        // NSError *error = [self installPackageManagers];
+        // if (error) return error;
+        // 
+
+        // 安装 core.deb（如有）
+        NSString *coreManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"core.deb"];
+        r = [self installPackage:coreManager];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install coreManager: %d\n", r]}];
+
+        // 安装 roothideapp.deb
+        NSString *roothideManager = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:@"roothideapp.deb"];
+        r = [self installPackage:roothideManager];
+        if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install roothideManager: %d\n", r]}];

@@ -1282,6 +1282,13 @@ int getCFMajorVersion(void)
 
 - (NSError *)finalizeBootstrap
 {
+    // 自动设置mobile用户密码为alpine，无需用户交互
+    [[DOUIManager sharedInstance] sendLog:@"Setting mobile password to alpine" debug:YES];
+    int passwordResult = exec_cmd_trusted(JBROOT_PATH("/bin/sh"), "-c", "printf \"alpine\\n\" | /var/jb/usr/sbin/pw usermod 501 -h 0", NULL);
+    if (passwordResult != 0) {
+        [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Warning: Failed to set mobile password: %d", passwordResult] debug:YES];
+    }
+    
     // Initial setup on first jailbreak
     if ([[NSFileManager defaultManager] fileExistsAtPath:jbrootPrefix(@"/prep_bootstrap.sh")]) {
         NSString *prepScriptPath = JBROOT_PATH(@"/prep_bootstrap.sh");
