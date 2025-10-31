@@ -34,6 +34,7 @@
 		042479B92B66916B0082581B /* DOGlobalAppearance.m in Sources */ = {isa = PBXBuildFile; fileRef = 042479A02B66916B0082581B /* DOGlobalAppearance.m */; };
 		042479E52B66B0DD0082581B /* Preferences.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 042479E42B66B0DD0082581B /* Preferences.framework */; };
 		0443A9B12B79D9C10014C933 /* DOPSListItemsController.m in Sources */ = {isa = PBXBuildFile; fileRef = 0443A9AF2B79D9C10014C933 /* DOPSListItemsController.m */; };
+		8CFB20032D789ABC00FE12A0 /* DOAIApplicationsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 8CFB20022D789ABC00FE12A0 /* DOAIApplicationsViewController.m */; };
 		04C2469C2B73220400E17924 /* DOUpdateViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 04C246982B73220400E17924 /* DOUpdateViewController.m */; };
 		04C2469D2B73220400E17924 /* DOUpdateCircleView.m in Sources */ = {isa = PBXBuildFile; fileRef = 04C246992B73220400E17924 /* DOUpdateCircleView.m */; };
 		04C246A12B73225800E17924 /* DODownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 04C246A02B73225800E17924 /* DODownloadViewController.m */; };
@@ -324,6 +325,8 @@
 		0424799D2B66916B0082581B /* DOActionMenuView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DOActionMenuView.m; sourceTree = "<group>"; };
 		0424799E2B66916B0082581B /* DOActionMenuDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DOActionMenuDelegate.h; sourceTree = "<group>"; };
 		0424799F2B66916B0082581B /* DOMainViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DOMainViewController.m; sourceTree = "<group>"; };
+		8CFB20012D789ABC00FE12A0 /* DOAIApplicationsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DOAIApplicationsViewController.h; sourceTree = "<group>"; };
+		8CFB20022D789ABC00FE12A0 /* DOAIApplicationsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DOAIApplicationsViewController.m; sourceTree = "<group>"; };
 		042479A02B66916B0082581B /* DOGlobalAppearance.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DOGlobalAppearance.m; sourceTree = "<group>"; };
 		042479E42B66B0DD0082581B /* Preferences.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Preferences.framework; path = Frameworks/Preferences.framework; sourceTree = "<group>"; };
 		0443A9AF2B79D9C10014C933 /* DOPSListItemsController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DOPSListItemsController.m; sourceTree = "<group>"; };
@@ -622,6 +625,7 @@
 				042479692B66916B0082581B /* Settings */,
 				0424798A2B66916B0082581B /* Log */,
 				042479992B66916B0082581B /* ActionMenu */,
+				8CFB20002D789ABC00FE12A0 /* AI */,
 				04C246972B73220400E17924 /* Update */,
 				042479812B66916B0082581B /* DOUIManager.h */,
 				042479882B66916B0082581B /* DOUIManager.m */,
@@ -721,6 +725,15 @@
 				0424799E2B66916B0082581B /* DOActionMenuDelegate.h */,
 			);
 			path = ActionMenu;
+			sourceTree = "<group>";
+		};
+		8CFB20002D789ABC00FE12A0 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				8CFB20012D789ABC00FE12A0 /* DOAIApplicationsViewController.h */,
+				8CFB20022D789ABC00FE12A0 /* DOAIApplicationsViewController.m */,
+			);
+			path = AI;
 			sourceTree = "<group>";
 		};
 		0443A9AE2B79D9A40014C933 /* PSLists */ = {
@@ -1684,6 +1697,7 @@
 				042479A52B66916B0082581B /* DOCreditsCell.m in Sources */,
 				8C296BAC2BE049E4007C2AD1 /* DOPSExploitListItemsController.m in Sources */,
 				042479B82B66916B0082581B /* DOMainViewController.m in Sources */,
+				8CFB20032D789ABC00FE12A0 /* DOAIApplicationsViewController.m in Sources */,
 				8C029F432B4DFD5D0071DE58 /* DOExploitManager.m in Sources */,
 				042479B02B66916B0082581B /* DOLoadingIndicator.m in Sources */,
 				042479AC2B66916B0082581B /* DOJailbreakButton.m in Sources */,

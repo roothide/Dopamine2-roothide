@@ -90,6 +90,9 @@
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Settings_Title") image:[UIImage systemImageNamed:@"gearshape" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"settings" handler:^(__kindof UIAction * _Nonnull action) {
             [self.navigationController pushViewController:[[DOSettingsController alloc] init] animated:YES];
         }],
+        [UIAction actionWithTitle:DOLocalizedString(@"Menu_AI_Applications_Title") image:[UIImage systemImageNamed:@"brain.head.profile" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"ai-apps" handler:^(__kindof UIAction * _Nonnull action) {
+            [self.navigationController pushViewController:[[DOAIApplicationsViewController alloc] init] animated:YES];
+        }],
         [UIAction actionWithTitle:DOLocalizedString(@"Menu_Restart_SpringBoard_Title") image:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:@"respring" handler:^(__kindof UIAction * _Nonnull action) {
             [self fadeToBlack:^{
                 [[DOEnvironmentManager sharedManager] respring];
@@ -369,7 +372,7 @@
 
 - (BOOL)actionMenuShowsChevronForAction:(UIAction *)action
 {
-    if ([action.identifier isEqualToString:@"settings"] || [action.identifier isEqualToString:@"credits"]) return YES;
+    if ([action.identifier isEqualToString:@"settings"] || [action.identifier isEqualToString:@"credits"] || [action.identifier isEqualToString:@"ai-apps"]) return YES;
     return NO;
 }
 

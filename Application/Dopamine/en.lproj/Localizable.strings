@@ -11,9 +11,16 @@
 
 // Action Menu
 "Menu_Settings_Title" = "Settings";
+"Menu_AI_Applications_Title" = "AI Toolbox";
 "Menu_Restart_SpringBoard_Title" = "Restart SpringBoard";
 "Menu_Reboot_Userspace_Title" = "Reboot Userspace";
 "Menu_Credits_Title" = "Credits";
+
+// AI Catalog
+"AI_Applications_Header" = "Discover AI Tools";
+"AI_Section_Chatbots" = "Chat Assistants";
+"AI_Section_Creative" = "Creative & Media";
+"AI_Section_Productivity" = "Productivity & Automation";
 
 // Updating
 "Button_Update" = "Update";
