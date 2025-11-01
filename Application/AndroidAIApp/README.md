@@ -1,6 +1,6 @@
 # AI Toolbox (Android)
 
-Android implementation of the AI catalog experience introduced in the iOS Dopamine application. The app is a standalone Jetpack Compose project that presents the same curated categories and launches each tool in the system browser.
+Android implementation of a lightweight AI tool launcher. The app presents curated categories for popular free or trial AI services and opens each one inside an in-app browser (Chrome Custom Tabs) with a single tap.
 
 ## Project Layout
 
@@ -20,10 +20,10 @@ Application/AndroidAIApp/
 
 ## Features
 
-- Dark-themed gradient background mirroring the Dopamine aesthetic.
-- Categorised list of AI services (chat assistants, creative tools, productivity copilots).
-- Tappable cards that open the selected service in the user's browser with graceful error handling.
-- Material 3 theming with adaptive typography and preview support.
+- Dark gradient aesthetic inspired by the Dopamine UI.
+- Categorised list of tools (chat, media, productivity) with short descriptions.
+- Opens links directly via Chrome Custom Tabs with graceful fallback behaviour.
+- Fully built with Jetpack Compose for quick customisation and future expansion.
 
 ## Building & Running
 
@@ -44,13 +44,13 @@ You can create a Gradle wrapper via `gradle wrapper` should you need reproducibl
 
 ## Parity with iOS Implementation
 
-- Data: Uses the same curated catalog as the Objective-C view controller (`DOAIApplicationsViewController`).
-- Navigation: Both platforms push a dedicated screen from the main action hub and deep-link to external URLs.
-- Styling: Android replicates the modal card style with rounded corners, translucency, and dark gradients.
-- Differences: Android leverages Compose's `LazyColumn` instead of UIKit stacks and relies on Material 3 typography/token defaults.
+- Data: tool metadata lives in a single Kotlin object (`AiToolCatalog`) and can be replaced with remote JSON later.
+- Navigation: each card launches the service in a custom tab with fallback to the default browser.
+- Styling: Material 3 + Compose cards with subtle transparency and rounded corners.
+- Difference: no API keys required, making it a solid foundation before deeper integrations.
 
 ## Next Steps
 
-- Hook into a shared data source if the catalog needs server-driven updates.
-- Localize strings (`strings.xml`) once translations are available to mirror the existing `.strings` files on iOS.
-- Add instrumented UI tests (`androidTest`) for navigation and intent dispatch if this becomes part of a larger Android product.
+- Hook a remote data source (JSON, Firebase) to update the catalogue without a new release.
+- Localise strings via `strings.xml` if you plan to support additional languages.
+- Add `androidTest` coverage to verify link launching and error handling when no browser is available.

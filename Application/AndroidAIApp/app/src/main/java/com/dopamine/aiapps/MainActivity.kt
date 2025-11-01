@@ -1,12 +1,13 @@
 package com.dopamine.aiapps
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +41,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.Row
 import com.dopamine.aiapps.ui.theme.AiApplicationsTheme
 
 class MainActivity : ComponentActivity() {
@@ -49,30 +49,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             AiApplicationsTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AiApplicationsScreen()
+                    AiToolLauncherScreen()
                 }
             }
         }
     }
 }
 
-data class AiApplication(
+private data class AiTool(
     val name: String,
     val description: String,
     val url: String
 )
 
-data class AiCategory(
+private data class AiToolCategory(
     val title: String,
-    val applications: List<AiApplication>
+    val tools: List<AiTool>
 )
 
 @Composable
-fun AiApplicationsScreen(
-    modifier: Modifier = Modifier,
-) {
+private fun AiToolLauncherScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val categories = remember { AiContent.categories }
+    val categories = remember { AiToolCatalog.categories }
 
     val gradientColors = listOf(
         Color(0xFF0F172A),
@@ -86,8 +84,8 @@ fun AiApplicationsScreen(
     ) { padding ->
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(gradientColors))
+            .fillMaxSize()
+            .background(Brush.verticalGradient(gradientColors))
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -97,17 +95,15 @@ fun AiApplicationsScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = context.getString(R.string.ai_catalog_title),
+                            text = "AI Tool Launcher",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                         Text(
-                            text = "Curated AI assistants, creative studios, and productivity copilots.",
+                            text = "?????? ???? ????? ????? ?????? ????????? ???????? ?? ??? ??????? ?????????.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color.White.copy(alpha = 0.7f)
                         )
@@ -125,16 +121,8 @@ fun AiApplicationsScreen(
                             )
 
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                category.applications.forEach { app ->
-                                    AiApplicationCard(app) { target ->
-                                        val uri = Uri.parse(target)
-                                        val intent = Intent(Intent.ACTION_VIEW, uri)
-                                        try {
-                                            context.startActivity(intent)
-                                        } catch (exception: ActivityNotFoundException) {
-                                            Toast.makeText(context, "No browser found to open link", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
+                                category.tools.forEach { tool ->
+                                    AiToolCard(tool) { openUrl(context, tool.url) }
                                 }
                             }
                         }
@@ -148,15 +136,11 @@ fun AiApplicationsScreen(
 }
 
 @Composable
-fun AiApplicationCard(
-    application: AiApplication,
-    onOpen: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun AiToolCard(tool: AiTool, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onOpen(application.url) },
+            .clickable { onOpen() },
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White.copy(alpha = 0.08f),
@@ -171,121 +155,115 @@ fun AiApplicationCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = application.name,
+                text = tool.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White
             )
             Text(
-                text = application.description,
+                text = tool.description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.8f),
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis
             )
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                RowWithIcon()
-            }
+            Icon(
+                imageVector = Icons.Default.OpenInNew,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.8f)
+            )
         }
     }
 }
 
-@Composable
-private fun RowWithIcon() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.OpenInNew,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.8f)
-        )
-        Text(
-            text = "Open",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.8f)
-        )
+private fun openUrl(context: Context, url: String) {
+    val uri = Uri.parse(url)
+    val customTabsIntent = CustomTabsIntent.Builder()
+        .setShowTitle(true)
+        .build()
+
+    try {
+        customTabsIntent.launchUrl(context, uri)
+    } catch (unsupported: ActivityNotFoundException) {
+        val viewIntent = Intent(Intent.ACTION_VIEW, uri)
+        context.startActivity(viewIntent)
     }
 }
 
-private object AiContent {
+private object AiToolCatalog {
     val categories = listOf(
-        AiCategory(
-            title = "Chat Assistants",
-            applications = listOf(
-                AiApplication(
-                    name = "ChatGPT",
-                    description = "General-purpose assistant for ideation, explanations, and coding support.",
-                    url = "https://chat.openai.com"
+        AiToolCategory(
+            title = "?????? ?????",
+            tools = listOf(
+                AiTool(
+                    name = "DeepSeek Chat",
+                    description = "????? ?????? ????? ???? ?????? ?????? ???????? ?? ??? ??? ?????.",
+                    url = "https://chat.deepseek.com/"
                 ),
-                AiApplication(
-                    name = "Claude",
-                    description = "Anthropic's assistant focused on reasoning-heavy writing and analysis.",
-                    url = "https://claude.ai"
+                AiTool(
+                    name = "ChatGPT (??? ??????)",
+                    description = "????? ChatGPT ????????? ??????????? ??????? ?????? ??????.",
+                    url = "https://chat.openai.com/"
                 ),
-                AiApplication(
+                AiTool(
                     name = "Gemini",
-                    description = "Google's multimodal AI with deep search and collaboration features.",
-                    url = "https://gemini.google.com"
+                    description = "????? ???? ???????? ?? ??? ????? ??????? ??????? ???.",
+                    url = "https://gemini.google.com/"
                 ),
-                AiApplication(
+                AiTool(
                     name = "Perplexity",
-                    description = "Conversational research engine with citation-backed answers.",
-                    url = "https://www.perplexity.ai"
+                    description = "???? ??? ????? ???? ?????? ?????? ?? ????? ??????.",
+                    url = "https://www.perplexity.ai/"
                 )
             )
         ),
-        AiCategory(
-            title = "Creative & Media",
-            applications = listOf(
-                AiApplication(
-                    name = "Midjourney",
-                    description = "Community-driven image generation for concept art and branding.",
-                    url = "https://www.midjourney.com"
+        AiToolCategory(
+            title = "??? ??????",
+            tools = listOf(
+                AiTool(
+                    name = "Stable Diffusion (ClipDrop)",
+                    description = "????? ??? ????? ?? Stability.ai ?? ??????? ????? ????????.",
+                    url = "https://clipdrop.co/stable-diffusion"
                 ),
-                AiApplication(
-                    name = "Runway",
-                    description = "Video editing and generative video tools for storytellers.",
-                    url = "https://runwayml.com"
-                ),
-                AiApplication(
+                AiTool(
                     name = "Ideogram",
-                    description = "Text-accurate image generation for marketing and typography designs.",
-                    url = "https://ideogram.ai"
+                    description = "???? ????? ??? ????? ?????? ????? ??????? ?????????.",
+                    url = "https://ideogram.ai/"
                 ),
-                AiApplication(
-                    name = "ElevenLabs",
-                    description = "High-quality synthetic voices for narration and localization.",
-                    url = "https://elevenlabs.io"
+                AiTool(
+                    name = "Runway",
+                    description = "????? ????? ????? ???? ?????? ????? ???? ?????? ?????.",
+                    url = "https://runwayml.com/"
+                ),
+                AiTool(
+                    name = "Leonardo AI",
+                    description = "???? ??? ????? ?? ????? ?????? ?????? ?????? ????? ??????.",
+                    url = "https://app.leonardo.ai/"
                 )
             )
         ),
-        AiCategory(
-            title = "Productivity & Automation",
-            applications = listOf(
-                AiApplication(
-                    name = "GitHub Copilot",
-                    description = "AI pair-programmer that suggests code in real time inside editors.",
-                    url = "https://github.com/features/copilot"
+        AiToolCategory(
+            title = "????? ????????",
+            tools = listOf(
+                AiTool(
+                    name = "GitHub Copilot Chat",
+                    description = "????? ????? ???? ??????? ????????? ????? ???? ???????.",
+                    url = "https://github.com/copilot"
                 ),
-                AiApplication(
+                AiTool(
+                    name = "Cody by Sourcegraph",
+                    description = "????? ????? ????? ???? ????? ?????? ????? ??? ??????????.",
+                    url = "https://sourcegraph.com/cody"
+                ),
+                AiTool(
                     name = "Notion AI",
-                    description = "Embedded writing and research assistant within workspace documents.",
+                    description = "????? ?????? ???? ?????? Notion ?? ??? ?????? ??????.",
                     url = "https://www.notion.so/product/ai"
                 ),
-                AiApplication(
-                    name = "Zapier Central",
-                    description = "AI-assisted workflow builder that joins apps and automations.",
-                    url = "https://zapier.com/ai"
-                ),
-                AiApplication(
-                    name = "Cody",
-                    description = "Sourcegraph's contextual enterprise AI assistant for codebases.",
-                    url = "https://about.sourcegraph.com/cody"
+                AiTool(
+                    name = "HuggingFace Spaces",
+                    description = "????? ???? ?????? ????? ?????? ?????? ??? ?????? ??? ?????.",
+                    url = "https://huggingface.co/spaces"
                 )
             )
         )
@@ -294,8 +272,8 @@ private object AiContent {
 
 @Preview(showBackground = true)
 @Composable
-private fun AiApplicationsPreview() {
+private fun AiToolLauncherPreview() {
     AiApplicationsTheme {
-        AiApplicationsScreen()
+        AiToolLauncherScreen()
     }
 }
