@@ -15,7 +15,7 @@ SDK_PATH=$(shell xcrun --sdk $(SDK) --show-sdk-path)
 CONFIG=debug
 
 SWIFTC_ARGS=-sdk "$(SDK_PATH)" -target $(TARGET) -O -framework IOKit -framework CoreServices -D__DARWIN_OPAQUE_ARM_THREAD_STATE64
-SWIFT_BUILD_ARGS=--triple $(TARGET) --sdk "$(SDK_PATH)" -c $(CONFIG) -Xcc "-DIOS_BUILD" -Xcc -Wno-incompatible-sysroot $(addprefix -Xswiftc ,$(SWIFTC_ARGS))
+SWIFT_BUILD_ARGS= -Xcc -target -Xcc $(TARGET) --sdk "$(SDK_PATH)" -c $(CONFIG) -Xcc "-DIOS_BUILD" -Xcc -Wno-incompatible-sysroot $(addprefix -Xswiftc ,$(SWIFTC_ARGS))
 
 all: MachOMerger
 

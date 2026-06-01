@@ -9,7 +9,8 @@
 
 #import <Foundation/Foundation.h>
 
-void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
+//void abort_with_reason(uint32_t reason_namespace, uint64_t reason_code, const char *reason_string, uint64_t reason_flags);
+#define abort_with_reason(reason_namespace,reason_code,reason_string,reason_flags)  launchd_panic("%s",reason_string)
 
 int jbupdate_basebin(const char *basebinTarPath)
 {
@@ -31,6 +32,7 @@ int jbupdate_basebin(const char *basebinTarPath)
 		// Update basebin trustcache
 		NSString *trustcachePath = [tmpBasebinPath stringByAppendingPathComponent:@"basebin.tc"];
 		if (![[NSFileManager defaultManager] fileExistsAtPath:trustcachePath]) return 3;
+/*
 		trustcache_file_v1 *basebinTcFile = NULL;
 		if (trustcache_file_build_from_path(trustcachePath.fileSystemRepresentation, &basebinTcFile) != 0) {
 			[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
@@ -38,6 +40,11 @@ int jbupdate_basebin(const char *basebinTarPath)
 		}
 		r = trustcache_file_upload_with_uuid(basebinTcFile, BASEBIN_TRUSTCACHE_UUID);
 		free(basebinTcFile);
+*/
+/********************************* roothide specfic ********************/
+		r = randomizeAndLoadBasebinTrustcache(tmpBasebinPath.fileSystemRepresentation);
+/********************************* roothide specfic ********************/
+
 		if (r != 0) {
 			[[NSFileManager defaultManager] removeItemAtPath:tmpExtractionPath error:nil];
 			return 5;
@@ -112,7 +119,7 @@ void jbupdate_update_system_info(void)
 		int r = xpf_start_with_kernel_path(kernelPath);
 		const char *error = NULL;
 		if (r == 0) {
-			char *sets[] = {
+			char *sets[99] = {
 				"translation",
 				"trustcache",
 				"sandbox",
@@ -141,6 +148,18 @@ void jbupdate_update_system_info(void)
 			if (xpf_set_is_supported("perfkrw")) {
 				sets[idx++] = "perfkrw";
 			}
+
+
+/********************** roothide *************************/
+sets[idx++] = "namecache";
+
+if (xpf_set_is_supported("amfi_oids")) {
+	sets[idx++] = "amfi_oids";
+}
+
+sets[idx] = NULL;
+/********************** roothide *************************/
+
 
 			newSystemInfoXdict = xpf_construct_offset_dictionary((const char **)sets);
 			if (!newSystemInfoXdict) {

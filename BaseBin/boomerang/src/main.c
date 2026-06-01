@@ -10,8 +10,13 @@
 #include <libjailbreak/jbserver_boomerang.h>
 #include <libjailbreak/stock_fixes.h>
 
+#include <libjailbreak/roothider.h>
+
 int main(int argc, char* argv[])
 {
+	crashreporter_start();
+	JBLogDebug("Boomerang started");
+
 	setsid();
 
 	__block bool launchdHasPhysrw = false;
@@ -56,6 +61,16 @@ int main(int argc, char* argv[])
 
 	// Send done message to launchd
 	jbclient_boomerang_done();
+
+
+/******************* roothide specific **********************/
+// patch new launchd process
+if(unrestrict(1, roothide_patch_proc, true) != 0) {
+	JBLogError("Failed to unrestrict launchd");
+	return -1;
+}
+/******************* roothide specific **********************/
+
 
 	// Now make our server run so that launchd can get everything back
 	dispatch_main();

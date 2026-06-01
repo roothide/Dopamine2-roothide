@@ -101,6 +101,9 @@ void mach_init_4real(void)
 
 void dyldhook_init(uintptr_t kernelParams)
 {
+extern void dyldhook_init_roothide(uintptr_t);
+dyldhook_init_roothide(kernelParams);
+
 	mach_init_4real();
 
 	// If we are in launchd, bail out
@@ -193,6 +196,9 @@ void dyldhook_init(uintptr_t kernelParams)
 
 	// If DYLD_INSERT_LIBRARIES is not set or does not contain systemhook, bail out
 	const char *insertLibrariesVar = _simple_getenv(envp, "DYLD_INSERT_LIBRARIES");
+if (!insertLibrariesVar) return;
+if (!strstr(insertLibrariesVar, "/usr/lib/systemhook-") && !strstr(insertLibrariesVar, "/basebin/systemhook.dylib")) return;
+
 	if (!insertLibrariesVar) {
 		if (gDyldHookLog) {
 			_simple_dprintf(2, "Not checking in, DYLD_INSERT_LIBRARIES was not found\n");

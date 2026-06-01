@@ -1,6 +1,7 @@
 CC = clang
 
 CFLAGS = -I../.include -isysroot $(shell xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=15.0 -Wno-deprecated-declarations -fno-stack-check -D_FORTIFY_SOURCE=0 -O2
+CFLAGS += -nostdlib -L. -lSystem # using a empty libSystem to check undefined symbols at build time
 LDFLAGS = -shared -Xlinker -add_split_seg_info
 FILES = $(wildcard src/*.c src/*.S ../libjailbreak/src/jbclient_mach.c)
 FILES_IOS15 = $(wildcard src/generated/ios15/*.c)

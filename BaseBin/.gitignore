@@ -14,3 +14,6 @@ forkfix/forkfix.dylib
 boomerang/boomerang
 jbctl/jbctl
 idownloadd/idownloadd
+jailbreakd/jailbreakd
+bootstrapper/bootstrapper
+jbupdate.sh

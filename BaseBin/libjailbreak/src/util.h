@@ -11,6 +11,8 @@ extern int posix_spawnattr_set_persona_np(const posix_spawnattr_t* __restrict, u
 extern int posix_spawnattr_set_persona_uid_np(const posix_spawnattr_t* __restrict, uid_t);
 extern int posix_spawnattr_set_persona_gid_np(const posix_spawnattr_t* __restrict, uid_t);
 
+#include "roothider.h"
+
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -67,9 +69,14 @@ int exec_cmd_env(char **envp, const char *binary, ...);
 int jbctl_earlyboot(mach_port_t earlyBootServer, ...);
 
 #define exec_cmd_trusted(x, args ...) ({ \
-    jbclient_trust_file_by_path(x); \
     int retval; \
-    retval = exec_cmd(x, args); \
+    if(jbclient_trust_file_by_path(x) == 0) { \
+		retval = exec_cmd(x, args); \
+	} else { \
+		fprintf(stderr, "exec_cmd_trusted: Failed to trust binary %s\n", x); \
+		JBLogError("exec_cmd_trusted: Failed to trust binary %s", x); \
+		retval = -1; \
+	} \
     retval; \
 })
 

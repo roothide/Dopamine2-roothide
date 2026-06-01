@@ -31,6 +31,12 @@ struct system_info {
 	struct {
 		uint64_t usesPACBypass;
 		char *rootPath;
+
+/************ roothide specfic *********/
+		uint64_t jbrand;
+		uint64_t palera1n;
+		bool dyld_patch_enabled;
+/************ roothide specfic *********/
 	} jailbreakInfo;
 
 	struct {
@@ -78,6 +84,14 @@ struct system_info {
 		uint64_t ppl_trust_cache_rt;
 		uint64_t mach_kobj_count;
 		uint64_t developer_mode_enabled;
+
+
+/************** roothide specfic ***********/
+		uint64_t nchashtbl;
+		uint64_t nchashmask;
+		uint64_t launch_env_logging;
+		uint64_t developer_mode_status;
+/************** roothide specfic ***********/
 	} kernelSymbol;
 
 	struct {
@@ -286,6 +300,12 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, kernelConstant.PVH_HIGH_FLAGS);
 
 #define JAILBREAK_INFO_ITERATE(ctx, iterator) \
+	\
+	iterator(ctx, jailbreakInfo.jbrand); \
+	iterator(ctx, jailbreakInfo.palera1n); \
+	iterator(ctx, jailbreakInfo.dyld_patch_enabled); \
+	\
+	\
 	iterator(ctx, jailbreakInfo.usesPACBypass); \
 	iterator(ctx, jailbreakInfo.rootPath);
 
@@ -294,6 +314,13 @@ extern struct system_info gSystemInfo;
 	iterator(ctx, jailbreakSettings.jetsamMultiplier);
 
 #define KERNEL_SYMBOLS_ITERATE(ctx, iterator) \
+	\
+	iterator(ctx, kernelSymbol.nchashtbl); \
+	iterator(ctx, kernelSymbol.nchashmask); \
+	iterator(ctx, kernelSymbol.launch_env_logging); \
+	iterator(ctx, kernelSymbol.developer_mode_status); \
+	\
+	\
 	iterator(ctx, kernelSymbol.perfmon_dev_open); \
 	iterator(ctx, kernelSymbol.vn_kqfilter); \
 	iterator(ctx, kernelSymbol.proc_find); \

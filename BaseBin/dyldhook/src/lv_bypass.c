@@ -53,7 +53,7 @@ int HOOK(__fcntl)(int fd, int cmd, void *arg1, void *arg2, void *arg3, void *arg
 
 	if (jbinfo_is_checked_in() || proc_has_bootstrap_port()) {
 			switch (cmd) {
-			case F_ADDSIGS:
+			case F_ADDSIGS: break;
 			case F_ADDFILESIGS:
 			case F_ADDFILESIGS_RETURN: {
 				struct siginfo siginfo;

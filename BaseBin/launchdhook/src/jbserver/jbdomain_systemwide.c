@@ -12,11 +12,16 @@
 #include <libjailbreak/primitives.h>
 #include <libjailbreak/codesign.h>
 
+#include <signal.h>
+#include <libjailbreak/roothider.h>
+
+/*
 bool gSystemwideDomainEnabled = true;
 void systemwide_domain_set_enabled(bool enabled)
 {
 	gSystemwideDomainEnabled = enabled;
 }
+*/
 
 extern bool string_has_prefix(const char *str, const char* prefix);
 extern bool string_has_suffix(const char* str, const char* suffix);
@@ -56,6 +61,7 @@ char *combine_strings(char separator, char **components, int count)
 	return outString;
 }
 
+/*
 bool systemwide_domain_allowed(audit_token_t clientToken)
 {
 	if (!gSystemwideDomainEnabled) {
@@ -78,6 +84,7 @@ bool systemwide_domain_allowed(audit_token_t clientToken)
 	}
 	return true;
 }
+*/
 
 static int systemwide_get_jbroot(char **rootPathOut)
 {
@@ -159,7 +166,7 @@ int systemwide_trust_file(audit_token_t *processToken, int rfd, struct siginfo *
 	int fsr = fstatfs(fd, &fsb);
 	if (fsr == 0) {
 		// Anything on the rootfs or fakelib mount point can be ignored as it's guaranteed to already be in trustcache
-		if (!strcmp(fsb.f_mntonname, "/") || !strcmp(fsb.f_mntonname, "/usr/lib")) {
+		if (!strcmp(fsb.f_mntonname, "/") /*|| !strcmp(fsb.f_mntonname, "/usr/lib")*/) {
 			close(fd);
 			return 0;
 		}
@@ -175,9 +182,41 @@ int systemwide_trust_file(audit_token_t *processToken, int rfd, struct siginfo *
 			cdhash_t cdhash;
 			if (code_signature_calculate_adhoc_cdhash(superblob, cdhash)) {
 				if (!is_cdhash_trustcached(cdhash)) {
+
+
+/******************************************* roothide specfic ****************************************/
+do {
+	char filepath[PATH_MAX] = {0};
+	if(fcntl(fd, F_GETPATH, filepath) != 0) {
+		JBLogError("Failed to get file path for fd %d", fd);
+		break;
+	}
+	if(string_has_prefix(filepath, "/private/preboot/Cryptexes/")) {
+		JBLogDebug("Skipping Cryptexes file: %s", filepath);
+		break;
+	}
+	if(isRemovableBundlePath(filepath) && !hasTrollstoreLiteMarker(filepath)) {
+		// ignore adhoc signed apps(removable system apps or other stuffs) which is not installed via tslite
+		JBLogDebug("ignoring addhoc signed app: %s\n", filepath);
+		break;
+	}
+	if(ensure_randomized_cdhash_for_slice(filepath, siginfo->signature.fs_file_start, cdhash) != 0) {
+		JBLogError("Failed to ensure randomized cdhash for %s", filepath);
+		break;
+	}
+/******************************************* roothide specfic ****************************************/
+
+
 					cdhashes = malloc(sizeof(cdhash_t));
 					cdhashesCount = 1;
 					memcpy(&cdhashes[0], &cdhash, sizeof(cdhash_t));
+
+
+/**********/
+} while(0);
+/********/
+
+
 				}
 			}
 			free(superblob);
@@ -225,6 +264,7 @@ int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, 
 	systemwide_get_jbroot(rootPathOut);
 	systemwide_get_boot_uuid(bootUUIDOut);
 
+/*
 	// Generate sandbox extensions for the requesting process
 	char *sandboxExtensionsArr[] = {
 		// Make /var/jb readable and executable
@@ -244,6 +284,23 @@ int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, 
 
 	bool fullyDebugged = false;
 	if (string_has_prefix(procPath, "/private/var/containers/Bundle/Application") || string_has_prefix(procPath, JBROOT_PATH("/Applications"))) {
+*/
+
+/************************************ roothide specific ************************************************/
+	uint32_t csflags = 0;
+    csops(pid, CS_OPS_STATUS, &csflags, sizeof(csflags));
+	bool isPlatformProcess = (csflags & CS_PLATFORM_BINARY) != 0;
+
+	// Generate sandbox extensions for the requesting process
+	*sandboxExtensionsOut = generate_sandbox_extensions(processToken, isPlatformProcess);
+	if(!(*sandboxExtensionsOut)) {
+		JBLogError("Failed to generate sandbox extensions for process %d", pid);
+	}
+
+	bool fullyDebugged = false;
+	if (isRemovableBundlePath(procPath) || isSubPathOf(procPath, JBROOT_PATH("/Applications"))) {
+/*************************************** roothide specific *********************************/
+		
 		// This is an app, enable CS_DEBUGGED based on user preference
 		if (jbsetting(markAppsAsDebugged)) {
 			fullyDebugged = true;
@@ -332,6 +389,10 @@ int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, 
 
 		// platformize
 		proc_csflags_set(proc, CS_PLATFORM_BINARY);
+
+/********************* roothide specific ********************/
+		proc_csflags_set(proc, CS_INSTALLER);
+/*************************************************************/
 	}
 
 #ifdef __arm64e__
@@ -509,7 +570,7 @@ static int systemwide_persona_fix(audit_token_t *callerToken, int childPid, uid_
 }
 
 struct jbserver_domain gSystemwideDomain = {
-	.permissionHandler = systemwide_domain_allowed,
+	.permissionHandler = roothide_domain_allowed,
 	.actions = {
 		// JBS_SYSTEMWIDE_GET_JBROOT
 		{

@@ -18,9 +18,11 @@ int main(int argc, char * argv[]) {
             if (!strcmp(argv[2], "delete-bootstrap")) {
                 [[DOEnvironmentManager sharedManager] deleteBootstrap];
             }
+/*
             else if (!strcmp(argv[2], "hide-jailbreak")) {
                 [[DOEnvironmentManager sharedManager] setJailbreakHidden:YES];
             }
+*/
             return 0;
         }
     }
@@ -39,7 +41,7 @@ int main(int argc, char * argv[]) {
     jbclient_process_checkin(NULL, NULL, NULL, NULL);
     
     if ([DOEnvironmentManager sharedManager].isJailbroken) {
-        setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/var/jb/sbin:/var/jb/bin:/var/jb/usr/sbin:/var/jb/usr/bin", 1);
+        setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin:/rootfs/sbin:/rootfs/bin:/rootfs/usr/sbin:/rootfs/usr/bin", 1);
         setenv("TERM", "xterm-256color", 1);
     }
     
