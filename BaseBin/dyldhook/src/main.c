@@ -196,16 +196,13 @@ dyldhook_init_roothide(kernelParams);
 
 	// If DYLD_INSERT_LIBRARIES is not set or does not contain systemhook, bail out
 	const char *insertLibrariesVar = _simple_getenv(envp, "DYLD_INSERT_LIBRARIES");
-if (!insertLibrariesVar) return;
-if (!strstr(insertLibrariesVar, "/usr/lib/systemhook-") && !strstr(insertLibrariesVar, "/basebin/systemhook.dylib")) return;
-
 	if (!insertLibrariesVar) {
 		if (gDyldHookLog) {
 			_simple_dprintf(2, "Not checking in, DYLD_INSERT_LIBRARIES was not found\n");
 		}
 		return;		
 	}
-	if (!strstr(insertLibrariesVar, "/systemhook.dylib")) {
+	if (!strstr(insertLibrariesVar, "/systemhook")) {
 		if (gDyldHookLog) {
 			_simple_dprintf(2, "Not checking in, no systemhook found in DYLD_INSERT_LIBRARIES (%s)\n", insertLibrariesVar);
 		}

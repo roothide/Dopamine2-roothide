@@ -53,9 +53,15 @@ int HOOK(__fcntl)(int fd, int cmd, void *arg1, void *arg2, void *arg3, void *arg
 
 	if (jbinfo_is_checked_in() || proc_has_bootstrap_port()) {
 			switch (cmd) {
-			case F_ADDSIGS: break;
+			case F_ADDSIGS:
+				break;
 			case F_ADDFILESIGS:
 			case F_ADDFILESIGS_RETURN: {
+				//A syscall should be much faster than checking the trustcache via ipc, as each library only needs to be trusted once
+				int ret = (int)msyscall_errno(0x5C, fd, cmd, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+				if(ret==0) {
+					return ret;
+				}
 				struct siginfo siginfo;
 				siginfo.source = (cmd == F_ADDSIGS) ? SIGNATURE_SOURCE_PROC : SIGNATURE_SOURCE_FILE;
 				if (arg1) memcpy(&siginfo.signature, (fsignatures_t *)arg1, sizeof (fsignatures_t));
