@@ -192,6 +192,10 @@ JBLogDebug("jbctl startup: bootstrapping launch daemons ...");
 exec_cmd(JBROOT_PATH("/usr/bin/launchctl"), "bootstrap", "system", "/Library/LaunchDaemons", NULL);
 
 JBLogDebug("jbctl startup: refreshing jailbroken apps ...");
+
+if(access(JBROOT_PATH("/.disable_auto_uicache"), F_OK) == 0) {
+	return 0;
+}
 /************************* roothide specific ***************************/
 
 

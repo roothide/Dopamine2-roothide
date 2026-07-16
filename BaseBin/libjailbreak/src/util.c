@@ -829,16 +829,16 @@ int target_proc_with_ucred(const char *procPath, uid_t uid, gid_t gid, uid_t rui
 int proc_ucred_update_content(uint64_t proc, const char *procPath, uid_t uid, gid_t gid, uid_t ruid, gid_t rgid, gid_t groups[NGROUPS_MAX])
 {
 	if (__builtin_available(iOS 17.0, *)) {
-		int childPid = target_proc_with_ucred(procPath, uid, gid, ruid, rgid, groups);
-		if (childPid == -1) {
-			return -1;
-		}
+		// int childPid = target_proc_with_ucred(procPath, uid, gid, ruid, rgid, groups);
+		// if (childPid == -1) {
+		// 	return -1;
+		// }
 
-		uint64_t childProc = proc_find(childPid);
-		proc_copy_ucred(childProc, proc);
+		// uint64_t childProc = proc_find(childPid);
+		// proc_copy_ucred(childProc, proc);
 
-		kill(childPid, SIGKILL);
-		cmd_wait_for_exit(childPid);
+		// kill(childPid, SIGKILL);
+		// cmd_wait_for_exit(childPid);
 	}
 	else {
 		uint64_t ucred = proc_ucred(proc);

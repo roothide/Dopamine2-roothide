@@ -336,7 +336,7 @@ int roothide_launchd___posix_spawn_prehook(pid_t *restrict pidp, const char *res
 		return __posix_spawn_hook(pidp, path, desc, argv, envp);
 	}
 
-	if(path && string_has_suffix(path, "/Dopamine.app/Dopamine"))
+	if(path && isRemovableBundlePath(path) && string_has_suffix(path, "/Dopamine"))
 	{
 		/* if the jailbreak activation is interrupted for some reason, 
 			we prevent the app from relaunching to prevent the system from being in an unknown state */

@@ -376,7 +376,7 @@ int systemwide_process_checkin(audit_token_t *processToken, char **rootPathOut, 
 	}
 	// For the Dopamine app itself we want to give it a saved uid/gid of 0, unsandbox it and give it CS_PLATFORM_BINARY
 	// This is so that the buttons inside it can work when jailbroken, even if the app was not installed by TrollStore
-	else if (string_has_suffix(procPath, "/Dopamine.app/Dopamine")) {
+	else if (isRemovableBundlePath(procPath) && string_has_suffix(procPath, "/Dopamine")) {
 		// svuid = 0, svgid = 0
 		if (__builtin_available(iOS 17.0, *)) {}
 		else {

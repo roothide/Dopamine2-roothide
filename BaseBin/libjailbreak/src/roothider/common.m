@@ -706,7 +706,7 @@ int exec_cmd_roothide_spawn(pid_t* pidp, const char* path, const posix_spawn_fil
         need_patch_child = false;
     }
 
-    if(need_patch_child && !dyld_patch_enabled()) {
+    if(need_patch_child && !dyld_patch_enabled() && getpid()!=1) {
         if(jbclient_trust_executable_recurse(path, NULL) != 0) {
             JBLogError("Failed to trust executable: %s", path);
             return 999;
@@ -911,11 +911,29 @@ bool is_apple_internal_identifier(const char* identifier)
     return false;
 }
 
+NSSet* SensitiveAppIdentifiers()
+{
+    static NSSet* apps = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        JBLogDebug("Initializing sensitive app identifiers set");
+        apps = [NSSet setWithArray:SENSITIVE_APP_IDENTIFIERS];
+        NSString* customBundleId = [NSString stringWithContentsOfFile:JBROOT_PATH(@"/basebin/.AppIdentifier") encoding:NSUTF8StringEncoding error:nil];
+        if(customBundleId) {
+            if(customBundleId && customBundleId.length > 0) {
+                JBLogDebug("Added custom sensitive app identifier: %s", customBundleId.UTF8String);
+                apps = [apps setByAddingObject:customBundleId];
+            }
+        }
+    });
+    return apps;
+}
+
 bool is_sensitive_app_identifier(const char* identifier)
 {
     if(!identifier || !*identifier) return false;
 
-    for(NSString* item in SENSITIVE_APP_IDENTIFIERS) {
+    for(NSString* item in SensitiveAppIdentifiers()) {
         if([@(identifier) hasPrefix:item]) {
             return true;
         }

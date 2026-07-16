@@ -516,7 +516,7 @@ void roothide_init_with_executable(const char* executable)
 	}
 #endif
 
-	if(string_has_suffix(executable, "/Dopamine.app/Dopamine")) {
+	if(isRemovableBundlePath(executable) && string_has_suffix(executable, "/Dopamine")) {
 		loadPathHook(); //requre jit
 	}
 

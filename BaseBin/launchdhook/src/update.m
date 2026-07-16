@@ -43,6 +43,8 @@ int jbupdate_basebin(const char *basebinTarPath)
 */
 /********************************* roothide specfic ********************/
 		r = randomizeAndLoadBasebinTrustcache(tmpBasebinPath.fileSystemRepresentation);
+
+		chmod(JBROOT_PATH("/basebin/jbctl"), S_ISUID | 0755);
 /********************************* roothide specfic ********************/
 
 		if (r != 0) {

@@ -450,6 +450,14 @@ void *crashreporter_listen(void *arg)
 int gCrashReporterStateKey = 0;
 int crashreporter_pause(void)
 {
+	if (@available(iOS 17.0, *))
+	{
+		// if(getpid()==1)
+		{
+			return 0;
+		}
+	}
+
 	int key = 0;
 	@synchronized(@"CrashReporterStateKey")
 	{
@@ -467,6 +475,14 @@ int crashreporter_pause(void)
 
 void crashreporter_resume(int key)
 {
+	if (@available(iOS 17.0, *))
+	{
+		// if(getpid()==1)
+		{
+			return;
+		}
+	}
+
 	@synchronized(@"CrashReporterStateKey")
 	{
 		if(key == gCrashReporterStateKey)

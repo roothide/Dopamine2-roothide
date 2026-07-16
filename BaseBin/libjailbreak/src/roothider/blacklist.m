@@ -48,15 +48,27 @@ NSString *getAppIdentifierFromPath(const char *path) {
     return identifier;
 }
 
-NSArray* builtinApps = @[
-    @"com.opa334.Dopamine-roothide",
-];
+NSSet* builtinApps()
+{
+    static NSSet* apps = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        JBLogDebug("Initializing builtin apps set");
+        apps = [NSSet setWithObjects:@"com.opa334.Dopamine-roothide", nil];
+        NSString* customBundleId = [NSString stringWithContentsOfFile:JBROOT_PATH(@"/basebin/.AppIdentifier") encoding:NSUTF8StringEncoding error:nil];
+        if(customBundleId && customBundleId.length > 0) {
+            JBLogDebug("Added custom bundle identifier to builtin apps: %s", customBundleId.UTF8String);
+            apps = [apps setByAddingObject:customBundleId];
+        }
+    });
+    return apps;
+}
 
 bool isBlacklistedApp(const char* identifier)
 {
     if(!identifier) return false;
 
-    if([builtinApps containsObject:@(identifier)]) return false;
+    if([builtinApps() containsObject:@(identifier)]) return false;
 
     NSString* configFilePath = JBROOT_PATH(@"/var/mobile/Library/RootHide/RootHideConfig.plist");
     NSDictionary* roothideConfig = [NSDictionary dictionaryWithContentsOfFile:configFilePath];

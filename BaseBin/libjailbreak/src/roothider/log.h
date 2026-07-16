@@ -1,4 +1,4 @@
-// #define ENABLE_LOGS
+#define ENABLE_LOGS
 
 #ifdef ENABLE_LOGS
 #include <unistd.h>

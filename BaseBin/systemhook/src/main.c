@@ -227,7 +227,7 @@ if (msSafeModeValue) {
 		"/usr/libexec/xpcproxy",
 
 		// Dopamine app itself (jailbreak detection bypass tweaks can break it)
-		"Dopamine.app/Dopamine",
+		"/Dopamine",
 	};
 	for (size_t i = 0; i < sizeof(tweaksDisabledPathSuffixes) / sizeof(const char*); i++) {
 		if (string_has_suffix(gExecutablePath, tweaksDisabledPathSuffixes[i])) return false;

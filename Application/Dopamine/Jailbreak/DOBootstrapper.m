@@ -896,6 +896,11 @@ Types: deb\n\
 URIs: https://roothide.github.io/procursus\n\
 Suites: iphoneos-arm64e/%d\n\
 Components: main\n\
+\n\
+Types: deb\n\
+URIs: https://github.com/roothide/roothide.github.io/releases/download/%d/\n\
+Suites: ./\n\
+Components:\n\
 "
 
 // #define ALT_SOURCES "\
@@ -918,6 +923,7 @@ deb https://yourepo.com/ ./\n\
 deb https://havoc.app/ ./\n\
 deb https://roothide.github.io/ ./\n\
 deb https://roothide.github.io/procursus iphoneos-arm64e/%d main\n\
+deb https://github.com/roothide/roothide.github.io/releases/download/%d/ ./\n\
 \n\
 "
 
@@ -945,7 +951,7 @@ int getCFMajorVersion(void)
 {
     NSFileManager* fm = NSFileManager.defaultManager;
     
-    ASSERT([[NSString stringWithFormat:@(DEFAULT_SOURCES), getCFMajorVersion()] writeToFile:jbrootPrefix(@"/etc/apt/sources.list.d/default.sources") atomically:YES encoding:NSUTF8StringEncoding error:nil]);
+    ASSERT([[NSString stringWithFormat:@(DEFAULT_SOURCES), getCFMajorVersion(), getCFMajorVersion()] writeToFile:jbrootPrefix(@"/etc/apt/sources.list.d/default.sources") atomically:YES encoding:NSUTF8StringEncoding error:nil]);
     
     // //Users in some regions seem to be unable to access github.io
     // if([NSLocale.currentLocale.countryCode isEqualToString:@"CN"]) {
@@ -958,7 +964,7 @@ int getCFMajorVersion(void)
         ASSERT([fm createDirectoryAtPath:jbrootPrefix(@"/var/mobile/Library/Application Support/xyz.willy.Zebra") withIntermediateDirectories:YES attributes:attr error:nil]);
     }
     
-    ASSERT([[NSString stringWithFormat:@(ZEBRA_SOURCES), getCFMajorVersion()] writeToFile:jbrootPrefix(@"/var/mobile/Library/Application Support/xyz.willy.Zebra/sources.list") atomically:YES encoding:NSUTF8StringEncoding error:nil]);
+    ASSERT([[NSString stringWithFormat:@(ZEBRA_SOURCES), getCFMajorVersion(), getCFMajorVersion()] writeToFile:jbrootPrefix(@"/var/mobile/Library/Application Support/xyz.willy.Zebra/sources.list") atomically:YES encoding:NSUTF8StringEncoding error:nil]);
     
     return 0;
 }
@@ -1230,8 +1236,14 @@ int getCFMajorVersion(void)
         }
         [self patchBasebinDaemonPlists];
         [[NSFileManager defaultManager] removeItemAtPath:jbrootPrefix(@"/basebin/basebin.tc") error:nil];
+
+        [NSBundle.mainBundle.bundleIdentifier writeToFile:jbrootPrefix(@"/basebin/.AppIdentifier") atomically:YES encoding:NSUTF8StringEncoding error:nil];
         
         JBFixMobilePermissions();
+
+        // Add setuid bit to jbctl
+        // Allows us in the end to reboot userspace after we're already mobile
+        chmod(JBROOT_PATH("/basebin/jbctl"), S_ISUID | 0755);
         
         completion(nil);
     }

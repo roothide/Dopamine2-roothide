@@ -76,6 +76,8 @@ bool is_safe_bundle_identifier(const char* identifier);
 bool is_sensitive_app_identifier(const char* identifier);
 bool is_apple_internal_identifier(const char* identifier);
 
+#ifdef __OBJC__
+
 #define APPLE_INTERNAL_IDENTIFIERS @[\
     @"com.apple.atrun",\
     @"com.apple.kdumpd",\
@@ -91,3 +93,7 @@ bool is_apple_internal_identifier(const char* identifier);
     @"com.opa334.Dopamine-roothide",\
 ]
 
+@class NSSet;
+NSSet* SensitiveAppIdentifiers();
+
+#endif

@@ -237,7 +237,7 @@ static int spawn_exec_hook_common(bool isExec,
 		// In iOS 17.0+ we can't give Dopamine root on check-in anymore, so we have to give it root at spawn
 		if (__builtin_available(iOS 17.0, *)) {
 			if (getpid() == 1 && path) {
-				if (string_has_suffix(path, "/Dopamine.app/Dopamine")) {
+				if (string_has_suffix(path, "/Dopamine")) {
 					posix_spawnattr_set_persona_np(&attr, 99, POSIX_SPAWN_PERSONA_FLAGS_OVERRIDE);
 					posix_spawnattr_set_persona_uid_np(&attr, 0);
 					posix_spawnattr_set_persona_gid_np(&attr, 0);
