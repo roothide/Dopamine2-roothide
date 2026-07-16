@@ -15,11 +15,6 @@ jobs:
   build:
     runs-on: macos-14
     steps:
-      - name: Xcode Setup
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
       - name: Checkout
         run: |
           set -x
