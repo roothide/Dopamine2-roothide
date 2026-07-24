@@ -43,9 +43,10 @@
 
     BOOL isJailbroken = [[DOEnvironmentManager sharedManager] isJailbroken];
     BOOL isSupported = [[DOEnvironmentManager sharedManager] isSupported];
+    BOOL autoJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"autoJailbreakEnabled" fallback:YES];
     BOOL removeJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"removeJailbreakEnabled" fallback:NO];
 
-    if (isJailbroken || !isSupported || removeJailbreakEnabled) return;
+    if (isJailbroken || !isSupported || !autoJailbreakEnabled || removeJailbreakEnabled) return;
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         if (!self.jailbreakBtn.enabled || self.jailbreakBtn.didExpand) return;
