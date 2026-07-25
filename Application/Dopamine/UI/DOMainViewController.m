@@ -61,9 +61,18 @@
 
 - (void)writeMewRemoteJailbrokenMarker
 {
+    NSDate *now = [NSDate date];
+
     NSUserDefaults *mewRemoteDefaults = [[NSUserDefaults alloc] initWithSuiteName:@"com.82flex.trollvnc"];
-    [mewRemoteDefaults setObject:[NSDate date] forKey:@"DopamineLastJailbrokenAt"];
+    [mewRemoteDefaults setObject:now forKey:@"DopamineLastJailbrokenAt"];
     [mewRemoteDefaults synchronize];
+
+    NSString *markerPath = @"/var/mobile/Library/Preferences/com.82flex.trollvnc.dopamine-marker.plist";
+    NSDictionary *marker = @{
+        @"DopamineLastJailbrokenAt" : now,
+        @"Source" : @"Dopamine"
+    };
+    [marker writeToFile:markerPath atomically:YES];
 }
 
 -(void)setupStack
