@@ -46,12 +46,24 @@
     BOOL autoJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"autoJailbreakEnabled" fallback:YES];
     BOOL removeJailbreakEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"removeJailbreakEnabled" fallback:NO];
 
-    if (isJailbroken || !isSupported || !autoJailbreakEnabled || removeJailbreakEnabled) return;
+    if (isJailbroken) {
+        [self writeMewRemoteJailbrokenMarker];
+        return;
+    }
+    if (!isSupported || !autoJailbreakEnabled || removeJailbreakEnabled) return;
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
         if (!self.jailbreakBtn.enabled || self.jailbreakBtn.didExpand) return;
         [self.jailbreakBtn.button sendActionsForControlEvents:UIControlEventTouchUpInside];
     });
+}
+
+
+- (void)writeMewRemoteJailbrokenMarker
+{
+    NSUserDefaults *mewRemoteDefaults = [[NSUserDefaults alloc] initWithSuiteName:@"com.82flex.trollvnc"];
+    [mewRemoteDefaults setObject:[NSDate date] forKey:@"DopamineLastJailbrokenAt"];
+    [mewRemoteDefaults synchronize];
 }
 
 -(void)setupStack
@@ -274,6 +286,7 @@
             else {
                 // No errors
                 [[DOUIManager sharedInstance] completeJailbreak];
+                [self writeMewRemoteJailbrokenMarker];
                 [self fadeToBlack: ^{
                     [jailbreaker finalize];
                 }];
