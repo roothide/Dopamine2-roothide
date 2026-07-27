@@ -233,7 +233,13 @@
             [autoJailbreakSpecifier setProperty:@YES forKey:@"enabled"];
             [autoJailbreakSpecifier setProperty:@"autoJailbreakEnabled" forKey:@"key"];
             [autoJailbreakSpecifier setProperty:@YES forKey:@"default"];
-            [specifiers addObject:autoJailbreakSpecifier];
+                          [specifiers addObject:autoJailbreakSpecifier];
+
+              PSSpecifier *exitWhenJailbrokenSpecifier = [PSSpecifier preferenceSpecifierNamed:@"Exit When Jailbroken" target:self set:defSetter get:defGetter detail:nil cell:PSSwitchCell edit:Nil];
+              [exitWhenJailbrokenSpecifier setProperty:@YES forKey:@"enabled"];
+              [exitWhenJailbrokenSpecifier setProperty:@"exitWhenJailbroken" forKey:@"key"];
+              [exitWhenJailbrokenSpecifier setProperty:@NO forKey:@"default"];
+              [specifiers addObject:exitWhenJailbrokenSpecifier];
             
             if (!envManager.isJailbroken) {
                 PSSpecifier *verboseLogSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Settings_Verbose_Logs") target:self set:defSetter get:defGetter detail:nil cell:PSSwitchCell edit:nil];
