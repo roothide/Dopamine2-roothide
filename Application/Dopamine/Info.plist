@@ -23,5 +23,7 @@
 	<string>Dopamine needs to access your photo library to support picking a boot logo</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>MewLaunchAtLogin</key>
+	<true/>
 </dict>
 </plist>
