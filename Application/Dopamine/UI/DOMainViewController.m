@@ -31,6 +31,7 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [self scheduleExitIfJailbroken];
     [self setupStack];
 }
 
@@ -73,6 +74,23 @@
         @"Source" : @"Dopamine"
     };
     [marker writeToFile:markerPath atomically:YES];
+}
+
+
+- (void)scheduleExitIfJailbroken
+{
+    BOOL exitEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"exitWhenJailbroken" fallback:NO];
+    if (!exitEnabled) return;
+
+    if ([[DOEnvironmentManager sharedManager] isJailbroken]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 7 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+            // Re-check in case user disabled it in the meantime
+            BOOL stillEnabled = [[DOPreferenceManager sharedManager] boolPreferenceValueForKey:@"exitWhenJailbroken" fallback:NO];
+            if (stillEnabled) {
+                exit(0);
+            }
+        });
+    }
 }
 
 -(void)setupStack
