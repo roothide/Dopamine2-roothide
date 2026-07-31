@@ -8,6 +8,7 @@
 #import <stdbool.h>
 #include <stdlib.h>
 
+void initExecPatch(void);
 int spawnExecPatchAdd(int pid, bool resume);
 int spawnExecPatchDel(int pid);
 

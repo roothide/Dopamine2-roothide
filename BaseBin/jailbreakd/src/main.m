@@ -107,6 +107,9 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		JBLogDebug("initializing exec patch handling...");
+		initExecPatch();
+
 		JBLogDebug("check in jailbreakd port...");
 		mach_port_t serverPort = jbclient_jailbreakd_checkin();
 		if (!MACH_PORT_VALID(serverPort)) {
