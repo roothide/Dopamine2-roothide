@@ -5,6 +5,18 @@
 #include <libjailbreak/libjailbreak.h>
 #include <libjailbreak/roothider.h>
 
+static dispatch_queue_t execPatchRequestQueue(void)
+{
+	static dispatch_queue_t queue;
+	static dispatch_once_t onceToken;
+	dispatch_once(&onceToken, ^{
+		// Keep the receive queue free for launchd's nested child-patch request
+		// while exec registration is waiting in kevent.
+		queue = dispatch_queue_create("com.roothide.jailbreakd.exec-patch", DISPATCH_QUEUE_SERIAL);
+	});
+	return queue;
+}
+
 void jailbreakd_reply_message(JBD_MESSAGE_ID msgId, xpc_object_t reply)
 {
 	char* desc = NULL;
@@ -94,17 +106,27 @@ void jailbreakd_received_message(mach_port_t port)
 				case JBD_MSG_SPAWN_EXEC_START: {
 					bool resume = xpc_dictionary_get_bool(message, "resume");
 					const char* execfile = xpc_dictionary_get_string(message, "execfile");
-					JBLogDebug("spawn exec start: %d %s", clientPid, execfile);
-					int64_t result = spawnExecPatchAdd(clientPid, resume);
-					xpc_dictionary_set_int64(reply, "result", result);
+					NSString* execPath = execfile ? @(execfile) : @"(null)";
+					dispatch_async(execPatchRequestQueue(), ^{
+						JBLogDebug("spawn exec start: %d %s", clientPid, execPath.UTF8String);
+						int64_t result = spawnExecPatchAdd(clientPid, resume);
+						xpc_dictionary_set_int64(reply, "result", result);
+						jailbreakd_reply_message(msgId, reply);
+					});
+					reply = nil;
 					break;
 				}
 
 				case JBD_MSG_SPAWN_EXEC_CANCEL: {
 					const char* execfile = xpc_dictionary_get_string(message, "execfile");
-					JBLogDebug("spawn exec cancel: %d %s", clientPid, execfile);
-					int64_t result = spawnExecPatchDel(clientPid);
-					xpc_dictionary_set_int64(reply, "result", result);
+					NSString* execPath = execfile ? @(execfile) : @"(null)";
+					dispatch_async(execPatchRequestQueue(), ^{
+						JBLogDebug("spawn exec cancel: %d %s", clientPid, execPath.UTF8String);
+						int64_t result = spawnExecPatchDel(clientPid);
+						xpc_dictionary_set_int64(reply, "result", result);
+						jailbreakd_reply_message(msgId, reply);
+					});
+					reply = nil;
 					break;
 				}
 

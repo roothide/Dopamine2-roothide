@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <xpc/xpc.h>
 #include <mach/mach.h>
 #include <bsm/libbsm.h>
@@ -296,6 +297,61 @@ xpc_object_t jailbreakdXpcRequest(xpc_object_t xdict)
 	return xreply;
 }
 
+typedef struct {
+	dispatch_semaphore_t semaphore;
+	xpc_object_t reply;
+	_Atomic uint32_t references;
+} jbd_timed_request_t;
+
+static void jbdTimedRequestRelease(jbd_timed_request_t *request)
+{
+	if (atomic_fetch_sub_explicit(&request->references, 1, memory_order_acq_rel) != 1) {
+		return;
+	}
+
+	if (request->reply) {
+		xpc_release(request->reply);
+	}
+#if !OS_OBJECT_USE_OBJC
+	dispatch_release(request->semaphore);
+#endif
+	free(request);
+}
+
+xpc_object_t jailbreakdXpcRequestWithTimeout(xpc_object_t xdict, uint64_t timeoutNanoseconds)
+{
+	jbd_timed_request_t *request = calloc(1, sizeof(*request));
+	if (!request) {
+		return NULL;
+	}
+
+	request->semaphore = dispatch_semaphore_create(0);
+	if (!request->semaphore) {
+		free(request);
+		return NULL;
+	}
+	atomic_init(&request->references, 2);
+
+	xpc_retain(xdict);
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		request->reply = jailbreakdXpcRequest(xdict);
+		xpc_release(xdict);
+		dispatch_semaphore_signal(request->semaphore);
+		jbdTimedRequestRelease(request);
+	});
+
+	if (dispatch_semaphore_wait(request->semaphore,
+		dispatch_time(DISPATCH_TIME_NOW, timeoutNanoseconds)) != 0) {
+		jbdTimedRequestRelease(request);
+		return NULL;
+	}
+
+	xpc_object_t reply = request->reply;
+	request->reply = NULL;
+	jbdTimedRequestRelease(request);
+	return reply;
+}
+
 int jbdTestCall(int value)
 {
 	xpc_object_t message = xpc_dictionary_create_empty();
@@ -347,12 +403,16 @@ int jbdSpawnPatchChild(int pid, bool resume)
 	xpc_dictionary_set_uint64(message, "id", JBD_MSG_SPAWN_PATCH_CHILD);
 	xpc_dictionary_set_int64(message, "pid", pid);
 	xpc_dictionary_set_bool(message, "resume", resume);
-	xpc_object_t reply = jailbreakdXpcRequest(message);
+	// launchd must be able to reach its existing failed-spawn cleanup instead
+	// of waiting indefinitely and triggering a system watchdog reboot.
+	xpc_object_t reply = jailbreakdXpcRequestWithTimeout(message, 10 * NSEC_PER_SEC);
 	xpc_release(message);
 	int64_t result = -1;
 	if (reply) {
 		result  = xpc_dictionary_get_int64(reply, "result");
 		xpc_release(reply);
+	} else {
+		JBLogError("jbdSpawnPatchChild timed out or failed for pid %d", pid);
 	}
 	return result;
 }

@@ -1,7 +1,9 @@
 #ifndef JAILBREAKD_H
 #define JAILBREAKD_H
 
+#include <stdint.h>
 #include <unistd.h>
+#include <xpc/xpc.h>
 
 typedef enum {
 	JBD_MSG_TEST_CALL = 101,
@@ -22,6 +24,9 @@ void setJailbreakdProcess(pid_t pid);
 
 mach_port_t jailbreakdClientPort();
 mach_port_t jailbreakdServerPort();
+
+XPC_RETURNS_RETAINED xpc_object_t jailbreakdXpcRequest(xpc_object_t xdict);
+XPC_RETURNS_RETAINED xpc_object_t jailbreakdXpcRequestWithTimeout(xpc_object_t xdict, uint64_t timeoutNanoseconds);
 
 int jbdTestCall(int value);
 int jbdSystemwideLog(const char* fmt, ...);
