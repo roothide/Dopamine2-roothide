@@ -1,7 +1,7 @@
 Package: libroot-dopamine
 Name: libroot (Dopamine)
-Author: opa334
-Maintainer: opa334
+Author: @vktesy
+Maintainer: @vktesy
 Architecture: iphoneos-arm64
 Version: 1.0.1
 Priority: optional
