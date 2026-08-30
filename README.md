@@ -1,1 +1,1 @@
-FastJail is a new semi-jailbreak based on dopamine (roothide)
+FastJail is a new semi-untethered jailbreak based on dopamine (roothide)
