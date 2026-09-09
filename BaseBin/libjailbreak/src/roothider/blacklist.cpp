@@ -167,7 +167,12 @@ extern "C" void register_job(pid_t pid)
     init_job_cache();
 
     pthread_rwlock_wrlock(&jobLock);
-    (*jobCache)[pid] = proc_get_uniqueid(pid);
+    uint64_t uniqueid = proc_get_uniqueid(pid);
+    if (uniqueid != 0) {
+        (*jobCache)[pid] = uniqueid;
+    } else {
+        jobCache->erase(pid);
+    }
     pthread_rwlock_unlock(&jobLock);
 }
 
@@ -177,9 +182,10 @@ extern "C" uint64_t get_job_cache(pid_t pid)
 
     uint64_t result = 0;
     pthread_rwlock_rdlock(&jobLock);
+    uint64_t uniqueid = proc_get_uniqueid(pid);
     auto it = jobCache->find(pid);
-    if (it != jobCache->end()) {
-        result = it->second;
+    if (uniqueid != 0 && it != jobCache->end() && it->second == uniqueid) {
+        result = uniqueid;
     }
     pthread_rwlock_unlock(&jobLock);
     return result;

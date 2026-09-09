@@ -23,12 +23,17 @@ NSDictionary* getCachedJobInfo(pid_t pid)
 	});
 
 	NSDictionary* jobInfo = nil;
-	uint64_t jobCache = get_job_cache(pid);
-	if (jobCache != 0)
+	@synchronized (cachedData)
 	{
-		@synchronized (cachedData)
+		uint64_t uniqueid = get_job_cache(pid);
+		if (uniqueid != 0)
 		{
 			jobInfo = cachedData[@(pid)];
+			if ([jobInfo[@"uniqueid"] unsignedLongLongValue] != uniqueid)
+			{
+				jobInfo = nil;
+			}
+
 			if (!jobInfo)
 			{
 				char path[PATH_MAX] = {0};
@@ -39,10 +44,18 @@ NSDictionary* getCachedJobInfo(pid_t pid)
 
 				jobInfo = @{
 					@"identifier":@(identifier),
-					@"path":@(path)
+					@"path":@(path),
+					@"uniqueid":@(uniqueid)
 				};
-				
-				cachedData[@(pid)] = jobInfo;
+
+				if (get_job_cache(pid) == uniqueid)
+				{
+					cachedData[@(pid)] = jobInfo;
+				}
+				else
+				{
+					jobInfo = nil;
+				}
 			}
 		}
 	}
@@ -130,7 +143,7 @@ int new_xpc_pipe_routine_reply(xpc_object_t reply)
 				volatile const char *bundle = bundle_identifier ? bundle_identifier : (name ? name : "");
 
 				volatile int clientPid = audit_token_to_pid(clientToken);
-				volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String];
+				volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String] ?: "";
 
 				volatile bool isSafeBundleIdentifier = is_safe_bundle_identifier(bundle);
 				volatile bool isSelfBundleIdentifier = client_identifier[0] && string_has_prefix(bundle, client_identifier);
@@ -242,7 +255,7 @@ bool roothide_handle_xpc_msg(xpc_object_t xmsg)
 
 			volatile int clientPid = audit_token_to_pid(clientToken);
 
-			volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String];
+			volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String] ?: "";
 
 			volatile bool isSafeBundleIdentifier = is_safe_bundle_identifier(bundle);
 			volatile bool isSelfBundleIdentifier = client_identifier[0] && string_has_prefix(bundle, client_identifier);
@@ -260,11 +273,12 @@ bool roothide_handle_xpc_msg(xpc_object_t xmsg)
 			volatile int pid = xpc_dictionary_get_int64(xmsg, "pid");
 			volatile int clientPid = audit_token_to_pid(clientToken);
 
-			volatile char* path = [getCachedJobInfo(pid)[@"path"] UTF8String] ?: "";
+			NSDictionary* jobInfo = getCachedJobInfo(pid);
+			volatile char* path = [jobInfo[@"path"] UTF8String] ?: "";
 
-			volatile char* proc_identifier = [getCachedJobInfo(pid)[@"identifier"] UTF8String] ?: "";
+			volatile char* proc_identifier = [jobInfo[@"identifier"] UTF8String] ?: "";
 
-			volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String];
+			volatile char* client_identifier = [getCachedJobInfo(clientPid)[@"identifier"] UTF8String] ?: "";
 
 			volatile bool isJailbrokenPath = !path[0] || hasTrollstoreMarker(path) || isSubPathOf(path, JBROOT_PATH("/"));
 			volatile bool isSafeBundleIdentifier = proc_identifier[0] && is_safe_bundle_identifier(proc_identifier);
