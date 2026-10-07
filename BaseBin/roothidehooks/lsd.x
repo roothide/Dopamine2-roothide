@@ -331,7 +331,10 @@ static BOOL utrUnitIsJailbreak(void* db, intptr_t unitID)
 typedef intptr_t (^UTREnumBlock)(intptr_t a2, intptr_t unitID, const void* unitBytes, void* a5);
 %hookf(void, _UTEnumerateTypesForTag, void* db, void* tagClass, void* tag, id block)
 {
-	if (!utrFilterActive() || !block) { %orig; return; }
+	if (!utrFilterActive() || !block) {
+		%orig;
+		return;
+	}
 
 	UTREnumBlock orig = (UTREnumBlock)block;
 	UTREnumBlock wrapper = ^intptr_t(intptr_t a2, intptr_t unitID, const void* unitBytes, void* a5) {
@@ -343,7 +346,10 @@ typedef intptr_t (^UTREnumBlock)(intptr_t a2, intptr_t unitID, const void* unitB
 
 %hookf(void, _UTEnumerateTypesForIdentifier, void* db, long identStrId, id block)
 {
-	if (!utrFilterActive() || !block) { %orig; return; }
+	if (!utrFilterActive() || !block) {
+		%orig;
+		return;
+	}
 
 	UTREnumBlock orig = (UTREnumBlock)block;
 	UTREnumBlock wrapper = ^intptr_t(intptr_t a2, intptr_t unitID, const void* unitBytes, void* a5) {
@@ -356,7 +362,10 @@ typedef intptr_t (^UTREnumBlock)(intptr_t a2, intptr_t unitID, const void* unitB
 typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t kind, unsigned char* outStop);
 %hookf(void, _UTTypeSearchConformingTypesWithBlock, void* db, long unitID, long flags, long arg4, id block)
 {
-	if (!utrFilterActive() || !block) { %orig; return; }
+	if (!utrFilterActive() || !block) {
+		%orig;
+		return;
+	}
 
 	UTRConformBlock orig = (UTRConformBlock)block;
 	UTRConformBlock wrapper = ^void(intptr_t uid, const void* unitBytes, intptr_t kind, unsigned char* outStop) {
@@ -371,7 +380,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 // _UTTypeConformsTo's boolean verdict goes through ...Common (not WithBlock), so it is unaffected.
 %hookf(void, _UTTypeSearchConformsToTypesWithBlock, void* db, long unitID, long flags, long arg4, id block)
 {
-	if (!utrFilterActive() || !block) { %orig; return; }
+	if (!utrFilterActive() || !block) {
+		%orig;
+		return;
+	}
 
 	UTRConformBlock orig = (UTRConformBlock)block;
 	UTRConformBlock wrapper = ^void(intptr_t uid, const void* unitBytes, intptr_t kind, unsigned char* outStop) {
@@ -397,7 +409,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 %hook _LSDReadClient
 - (void)getTypeRecordWithTag:(id)tag ofClass:(id)_class conformingToIdentifier:(id)identifier completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getTypeRecordWithTag:%@ ofClass:%@ conforming:%@ pid=%d", tag, _class, identifier, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -406,7 +421,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getTypeRecordsWithTag:(id)tag ofClass:(id)_class conformingToIdentifier:(id)identifier completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getTypeRecordsWithTag:%@ ofClass:%@ conforming:%@ pid=%d", tag, _class, identifier, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -415,7 +433,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getTypeRecordWithIdentifier:(id)identifier allowUndeclared:(BOOL)allowUndeclared completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getTypeRecordWithIdentifier:%@ allowUndeclared:%d pid=%d", identifier, allowUndeclared, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -424,7 +445,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getTypeRecordsWithIdentifiers:(id)identifiers completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getTypeRecordsWithIdentifiers:%@ pid=%d", identifiers, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -433,7 +457,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getTypeRecordForImportedTypeWithIdentifier:(id)identifier conformingToIdentifier:(id)conforming completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getTypeRecordForImportedTypeWithIdentifier:%@ conforming:%@ pid=%d", identifier, conforming, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -442,7 +469,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getRelatedTypesOfTypeWithIdentifier:(id)identifier maximumDegreeOfSeparation:(NSInteger)degree completionHandler:(void(^)(id, id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getRelatedTypesOfTypeWithIdentifier:%@ degree:%ld pid=%d", identifier, (long)degree, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -451,7 +481,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getWhetherTypeIdentifier:(id)identifier conformsToTypeIdentifier:(id)other completionHandler:(void(^)(id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getWhetherTypeIdentifier:%@ conformsToTypeIdentifier:%@ pid=%d", identifier, other, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -460,7 +493,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getResourceValuesForKeys:(id)keys URL:(id)url preferredLocalizations:(id)locs completionHandler:(void(^)(id, id, id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getResourceValuesForKeys:%@ URL:%@ pid=%d", keys, url, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;
@@ -469,7 +505,10 @@ typedef void (^UTRConformBlock)(intptr_t unitID, const void* unitBytes, intptr_t
 
 - (void)getBoundIconInfoForDocumentProxy:(id)documentProxy completionHandler:(void(^)(id, id))handler
 {
-	if (!utrHideClientBlacklisted(self)) { %orig; return; }
+	if (!utrHideClientBlacklisted(self)) {
+		%orig;
+		return;
+	}
 	NSLog(@"[UTType] getBoundIconInfoForDocumentProxy:%@ pid=%d", documentProxy, utrClientPid(self));
 	g_utrHide = YES;
 	%orig;

@@ -73,7 +73,9 @@ bool __thread gFakePass = true;
 %hookf(Boolean, CFEqual, CFTypeRef cf1, CFTypeRef cf2)
 {
 	if(cf1==kSecAttrAccessibleWhenUnlockedThisDeviceOnly || cf2==kSecAttrAccessibleWhenUnlockedThisDeviceOnly) {
-		if(%orig(cf1, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly) || %orig(cf2, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly)) {
+		Boolean r1 = %orig(cf1, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly);
+		Boolean r2 = %orig(cf2, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly);
+		if(r1 || r2) {
             NSLog(@"hijacking %@ : %@", cf1, cf2);
 			return YES; //akpu->aku
 		}
