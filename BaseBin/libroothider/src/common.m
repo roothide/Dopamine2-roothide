@@ -195,7 +195,7 @@ bool process_force_dyld_patch(const char* path, const char** argv)
         else if(is_stock_binary && string_has_suffix(path, "/com.apple.WebKit.WebContent.CaptivePortal")) {
             return true;
         }
-        else if(strcmp(path, "/usr/libexec/xpcproxy")==0)
+        else if(strcmp(path, "/usr/libexec/xpcproxy") == 0)
         {
             if (argv && argv[0] && argv[1]) {
                 if(string_has_prefix(argv[1], "com.apple.WebKit.WebContent")) {
@@ -207,6 +207,22 @@ bool process_force_dyld_patch(const char* path, const char** argv)
             }
         }
     }
+    
+    if(__builtin_available(iOS 17.0, *))
+    {
+        if(strcmp(path, "/System/Library/PrivateFrameworks/MessagesBlastDoorSupport.framework/XPCServices/MessagesAirlockService.xpc/MessagesAirlockService") == 0) {
+            return true;
+        }
+        else if(strcmp(path, "/usr/libexec/xpcproxy") == 0)
+        {
+            if (argv && argv[0] && argv[1]) {
+                if(string_has_prefix(argv[1], "com.apple.MessagesAirlockService")) {
+                    return true;
+                }
+            }
+        }
+    }
+
     return false;
 }
 
