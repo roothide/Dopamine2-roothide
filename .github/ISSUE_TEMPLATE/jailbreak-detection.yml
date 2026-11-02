@@ -33,11 +33,11 @@ body:
     validations:
       required: true
   - type: input
-    id: latest-packages
+    id: package-consistency-check
     attributes:
-      label: Packages Update
-      description: Have you updated all packages to the latest version in Sileo?
-      placeholder: Yes or No
+      label: Package consistency check
+      description: Check via https://roothide.github.io/check.html
+      placeholder: Paste the result here
     validations:
       required: true
   - type: input
@@ -77,12 +77,12 @@ body:
     attributes:
       label: More info
       description: Screenshots? Videos? How can we reproduce this?
-      placeholder: I did ..., but ... was supposed to happen. ... doesn't work!
+      placeholder: upload screenshots or videos here
     validations:
       required: true
   - type: textarea
-    id: logs
+    id: crash-logs
     attributes:
-      label: Log output
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
-      render: shell
+      label: Crash Logs
+      description: Please provide the crash logs if the app just crash/close when launched.
+      placeholder: zip and upload rootfs:/var/mobile/Library/Logs/CrashReporter using Filza
