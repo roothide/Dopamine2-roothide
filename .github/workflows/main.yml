@@ -89,9 +89,10 @@ jobs:
           plutil -insert items.4 -xml "<dict><key>cell</key><string>PSGroupCell</string><key>label</key><string>BUILDER</string></dict>" ./Application/Dopamine/UI/Settings/Credits.plist
           plutil -insert items.5 -xml "<dict><key>cell</key><string>PSGroupCell</string><key>headerCellClass</key><string>DOCreditsCell</string><key>names</key><array><dict><key>name</key><string>${{ github.actor }}</string><key>link</key><string>https://github.com/${{ github.repository }}</string></dict></array></dict>" ./Application/Dopamine/UI/Settings/Credits.plist
           gmake -j$(sysctl -n hw.logicalcpu) NIGHTLY=1
-          VERSION="("$(cat ./BaseBin/_external/basebin/.version)-$(cat ./BaseBin/_external/basebin/.version-roothide)-$(git rev-parse --short HEAD)")"-$(TZ=UTC git show -s --date=format-local:'%Y.%m.%d-%Z-%H.%M.%S' --format='%cd' HEAD)
-          mv ./Application/Dopamine.ipa  "./Application/roothide-Dopamine-${VERSION}.ipa"
-          mv ./Application/Dopamine.tipa "./Application/roothide-Dopamine-${VERSION}.tipa"
+          APP_VERSION="$(cat ./BaseBin/_external/basebin/.version)-$(cat ./BaseBin/_external/basebin/.version-roothide)"
+          VERSION="(${APP_VERSION}-$(git rev-parse --short HEAD))-$(TZ=UTC git show -s --date=format-local:'%Y.%m.%d-%Z-%H.%M.%S' --format='%cd' HEAD)"
+          mv "./Application/Dopamine-roothide-${APP_VERSION}.ipa"  "./Application/roothide-Dopamine-${VERSION}.ipa"
+          mv "./Application/Dopamine-roothide-${APP_VERSION}.tipa" "./Application/roothide-Dopamine-${VERSION}.tipa"
           echo "version=${VERSION}" >> $GITHUB_ENV
 
       - name: Upload Artifact
