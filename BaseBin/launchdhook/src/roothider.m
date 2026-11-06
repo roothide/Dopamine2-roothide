@@ -16,6 +16,7 @@
 
 #include "../systemhook/src/common/common.h"
 #include "../systemhook/src/common/envbuf.h"
+#include "telephony_blacklist.h"
 
 int roothider_inline_version = 0;
 bool launchdhookFirstLoad = false;
@@ -426,7 +427,8 @@ int roothide_launchd___posix_spawn_prehook(pid_t *restrict pidp, const char *res
 	}
 #endif
 
-	bool roothideBlacklisted = isBlacklistedPath(path);
+	bool telephonyBlastDoorProxy = roothide_is_telephony_blastdoor_proxy(path, argv);
+	bool roothideBlacklisted = isBlacklistedPath(path) || telephonyBlastDoorProxy;
 	if (choicyBlocked || roothideBlacklisted)
 	{
 		int ret;
@@ -448,6 +450,11 @@ int roothide_launchd___posix_spawn_prehook(pid_t *restrict pidp, const char *res
 			//choicy may set these 
 			envbuf_unsetenv(&envc, "_SafeMode");
 			envbuf_unsetenv(&envc, "_MSSafeMode");
+			if (telephonyBlastDoorProxy) {
+				// A sandboxed BlastDoor service cannot perform RootHide's
+				// initial jbserver check-in.
+				envbuf_unsetenv(&envc, "DYLD_INSERT_LIBRARIES");
+			}
 	
 			/* According to xnu, the new thread in new process will not run in userland until after copyout pid
 			https://github.com/apple-oss-distributions/xnu/blob/8d741a5de7ff4191bf97d57b9f54c2f6d4a15585/bsd/kern/kern_exec.c#L4321
